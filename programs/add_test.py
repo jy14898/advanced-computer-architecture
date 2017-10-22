@@ -1,8 +1,9 @@
 from instruction import *
 
 # 4 noops just to be safe
-program = [
+instructions = [
     LOAD("R1", "R0", 1),
+    LOAD("R1", "HELLO", 1),
     NOOP(),
     NOOP(),
     NOOP(),

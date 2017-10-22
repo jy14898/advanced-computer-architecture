@@ -2,245 +2,221 @@ import instruction
 from memory import Memory
 import functools
 
+# new system will re-introduce triggering values in terms of what caused the update
+# but we will only recieve 1 update per system change per component, so no need to worry about timing
+#
+# i think that's better??!?!?!
+# -a note someone made here:http://slideplayer.com/slide/9255919/
+# -https://www.cise.ufl.edu/~mssz/CompOrg/Figure5.6-PipelineControlLines.gif
 
-'''
-a note someone made here:http://slideplayer.com/slide/9255919/
-https://www.cise.ufl.edu/~mssz/CompOrg/Figure5.6-PipelineControlLines.gif
-'''
-
-'''
-instead of having inputs and outputs marked as constant, i move that decision
-to add_dependency and add a no_wait flag to say dont wait on this input
-
-I could also solve the issue of setup by once all the inputs are connected,
-the component does the first update but doesnt propagate its outputs. This will
-basically init the output values
-
-still doesnt fix it tho because we need an initial signal in the case of PC loop
-'''
 
 class Component(object):
-    def __init__(self):
-        self.inputs  = {}
-        self.outputs = {}
+    next_id = 0
 
-        self.checked_self = False
+    def __init__(self):
+        self.id = Component.next_id
+        Component.next_id = Component.next_id + 1
+
+        # NOTE: could remove one of these but it's nice to have uniform inputs/outputs
+        self.input_keys  = []
+        self.output_keys = []
+        self.output_values = {}
 
     def name(self):
-        return self.name_
+        raise NotImplementedError('Components must have a name()!')
 
-    def add_dependency(self, source, source_outkey, inkey):
-        assert inkey in self.inputs, "Input key doesnt exist"
-        assert self.inputs[inkey]["source"] == (None,None), "Only 1 source allowed to resolve 1 input"
-
-        isconstant = source.register(self, source_outkey, inkey)
-
-        self.inputs[inkey]["source"] = (source, source_outkey)
-        self.inputs[inkey]["updated"] = 2 if isconstant else 0
-
-        # if all inputs are constant then so is the output...
-        # also im not defining what happens when you connect two constant components together in a loop...
-        if all(v["updated"] == 2 for v in self.inputs.values()):
-            for outkey in self.outputs:
-                self.outputs[outkey]["constant"] = True
-
-            # Do the first pass as inputs are constant, then we never need to again
-            self.propagate()
-
-    def register(self, destination, outkey, destination_inkey):
-        assert outkey in self.outputs, "Tried to register to outkey {} which doesn't exist".format(outkey)
-        assert (destination, destination_inkey) not in self.outputs[outkey]["destinations"], "Tried to register {}'s inkey {} to outkey {} twice'".format(destination.name(), destination_inkey, outkey)
-
-        self.outputs[outkey]["destinations"].append((destination, destination_inkey))
-
-        return self.outputs[outkey]["constant"]
-
-    def get_output(self, outkey):
-        return self.outputs[outkey]["value"]
-
-    def set_output(self, outkey, value):
-        self.outputs[outkey]["value"] = value
-
-    # Just to make sure I havent forgotten any input connections as they're important
-    def is_setup(self):
-        if self.checked_self == True:
-            return True
-
-        for inkey in self.inputs:
-            if self.inputs[inkey]["source"] == (None, None):
-                return False
-
-        self.checked_self = True
-        return True
-
-    def update_input(self, source, source_outkey, inkey):
-        assert self.is_setup()
-
-        print "Updating input {} @ {} from {} @ {} with value {}".format(inkey, self.name(), source_outkey, source.name(), source.get_output(source_outkey))
-
-        assert inkey in self.inputs, "Tried to update inkey {} but doesn't exist".format(inkey)
-        assert self.inputs[inkey]["source"] == (source, source_outkey), "Wrong source and outkey"
-        assert self.inputs[inkey]["updated"] != 1, "Input {} for {} was set twice".format(inkey, self.name())
-        assert self.inputs[inkey]["updated"] != 2, "Attempted to change constant input"
-
-        self.inputs[inkey]["updated"] = 1
-
-        if all(v["updated"] == 1 or v["updated"] == 2 for v in self.inputs.values()):
-            self.propagate()
-
-    def propagate(self):
-        assert self.is_setup()
-
-        state = {}
-
-        for inkey in self.inputs:
-            state[inkey] = self.inputs[inkey]["source"][0].get_output(self.inputs[inkey]["source"][1])
-
-        self.update(state)
-
-        # reset non-constant inputs
-        for inkey in self.inputs:
-            if self.inputs[inkey]["updated"] == 1:
-                self.inputs[inkey]["updated"] = 0
-
-        # update non-constant outputs
-        for outkey in self.outputs:
-            if not self.outputs[outkey]["constant"]:
-                for destination, destination_inkey in self.outputs[outkey]["destinations"]:
-                    destination.update_input(self, outkey, destination_inkey)
-
-    def update(self, state):
+    # takes set of inputs and produces an output
+    def update(self, input_values, input_values_old):
         raise NotImplementedError('Components must override update()!')
 
     def add_input(self, key):
-        self.inputs[key] = {
-            "updated": 0,
-            "source": (None, None)
-        }
+        self.input_keys.append(key)
 
-    def add_output(self, key, constant=False):
-        self.outputs[key] = {
-            "value": None,
-            "destinations": [],
-            "constant": constant
-        }
+    def add_output(self, key, value):
+        self.output_keys.append(key)
+        self.output_values[key] = value
 
-class Constant(Component):
-    def __init__(self, value=0):
-        super(Constant, self).__init__()
-
-        self.add_output("out", constant=True)
-        self.set_output("out", value)
-
-class UserInput(Component):
+class ComponentConnectionOrchestrator(object):
     def __init__(self):
-        super(UserInput, self).__init__()
+        self.components = {
+            #"id": component
+        }
 
-        self.add_output("out")
+        self.connections = [
+            # ((id_out, out_key), (id_in, in_key))
+        ]
 
-    def write(self):
-        self.value_ = raw_input("Value: ")
-        self.propagate()
+    def add_component(self, component):
+        assert component.id not in self.components
+        self.components[component.id] = component
 
-    def update(self, state):
-        self.set_output("out", self.value_)
+    def add_connection(self, (id_out, out_key), (id_in, in_key)):
+        assert ((id_out, out_key), (id_in, in_key)) not in self.connections
+        self.connections.append(((id_out, out_key), (id_in, in_key)))
+
+    # assume all out_keys are updated
+    # could cache this
+    def propagate(self, id_out):
+        component_levels = {}
+        for component_id in self.components:
+            component_levels[component_id] = 0
+
+        def recurse(component_id, path):
+            if component_id in path:
+                return
+
+            if component_levels[component_id] < len(path):
+                component_levels[component_id] = len(path)
+
+            path = list(path)
+            path.append(component_id)
+
+            for out_key in self.components[component_id].output_keys:
+                outgoing_connections = list(set(c for ((a,b),(c,d)) in self.connections if (a,b) == (component_id,out_key)))
+
+                for id_out in outgoing_connections:
+                    recurse(id_out, path)
+
+        recurse(id_out, [])
+
+        component_levels = {i: l for i, l in component_levels.iteritems() if l > 0}
+        component_levels[id_out] = 0
+
+        output_values_old = {
+            #(id_out, out_key): value
+        }
+
+        for component_id in component_levels.keys():
+            for out_key in self.components[component_id].output_keys:
+                output_values_old[(component_id, out_key)] = self.components[component_id].output_values[out_key]
+
+        levels = {}
+        for component_id, level in component_levels.iteritems():
+            if level not in levels:
+                levels[level] = []
+
+            levels[level].append(component_id)
+
+        for level, component_ids in levels.iteritems():
+            for component_id in component_ids:
+                incoming_connections = list(((a,b),(d)) for ((a,b),(c,d)) in self.connections if c == component_id)
+
+                input_values = {}
+                input_values_old = {}
+                for ((out_id,out_key),in_key) in incoming_connections:
+                    input_values[in_key] = self.components[out_id].output_values[out_key]
+
+                    if (out_id,out_key) in output_values_old:
+                        input_values_old[in_key] = output_values_old[(out_id,out_key)]
+                    #consider input to be 'constant' for this update as it wasnt changed
+                    else:
+                        input_values_old[in_key] = input_values[in_key]
+
+                self.components[component_id].update(input_values, input_values_old)
+
+    def dump_component_states(self):
+        for component_id, component in self.components.iteritems():
+            print "{}:".format(component.name())
+            for out_key in component.output_keys:
+                print "    {} = {}".format(out_key, component.output_values[out_key])
+
+class Clock(Component):
+    def __init__(self):
+        super(Clock, self).__init__()
+
+        self.add_output("ph0", 0)
+        self.add_output("ph1", 1)
+
+        self.state_ = 0
+
+    def name(self):
+        return "clock"
+
+    def step(self):
+        self.state_ = 1 - self.state_
+
+    def update(self, input_values, input_values_old):
+        self.output_values["ph0"] = self.state_
+        self.output_values["ph1"] = 1 - self.state_
 
 class Latch(Component):
-    def __init__(self, value, name="latch"):
+    def __init__(self, value):
         super(Latch, self).__init__()
 
         self.add_input("in")
         self.add_input("clock")
 
-        self.add_output("out")
+        self.add_output("out", value)
 
-        self.name_ = name
+    def name(self):
+        return "latch"
 
-        self.set_output("out", value)
+    def update(self, input_values, input_values_old):
+        if input_values["clock"] == 1 and \
+            input_values_old["clock"] != input_values["clock"]:
 
-    def update(self, state):
-        if   state["clock"] == 1:
-            self.set_output("out", state["in"])
-        elif state["clock"] == 0:
-            # Keep the output value the same
-            pass
+            self.output_values["out"] = input_values["in"]
 
-class Clock(Component):
-    def __init__(self, name="clock"):
-        super(Clock, self).__init__()
+class Incrementer(Component):
+    def __init__(self):
+        super(Incrementer, self).__init__()
 
-        self.add_output("ph0")
-        self.add_output("ph1")
+        self.add_input("in")
+        self.add_output("out", 0)
 
-        self.state_ = 0
+    def name(self):
+        return "incrementer"
 
-        self.name_ = name
+    def update(self, input_values, input_values_old):
+        self.output_values["out"] = input_values["in"] + 1
 
-    def step(self):
-        self.state_ = 1 - self.state_
-        self.propagate()
+class Constant(Component):
+    def __init__(self, value=0):
+        super(Constant, self).__init__()
 
-    def update(self, state):
-        self.set_output("ph0", self.state_)
-        self.set_output("ph1", 1 - self.state_)
+        self.add_output("out", value)
 
+    def name(self):
+        return "constant"
+
+    def update(self, input_values, input_values_old):
+        pass
 
 class Multiplexer(Component):
-    def __init__(self, num_inputs, name="multiplexer"):
+    def __init__(self, num_inputs):
         super(Multiplexer, self).__init__()
 
         for i in xrange(num_inputs):
             self.add_input("input_{}".format(i))
 
         self.add_input("control")
-        self.add_output("out")
+        self.add_output("out", 0)
 
-        self.name_ = name
+    def name(self):
+        return "multiplexer"
 
-    def update(self, state):
-        self.set_output("out", state["input_{}".format(state["control"])])
-
-class Incrementer(Component):
-    def __init__(self, name="Incrementer"):
-        super(Incrementer, self).__init__()
-
-        self.add_input("in")
-        self.add_output("out")
-
-        self.name_ = name
-
-    def update(self, state):
-        self.set_output("out", state["in"] + 1)
-
-
-class Display(Component):
-    def __init__(self, name="Display"):
-        super(Display, self).__init__()
-
-        self.add_input("in")
-        self.name_ = name
-
-    def update(self, state):
-        print state["in"]
+    def update(self, input_values, input_values_old):
+        self.output_values["out"] = input_values["input_{}".format(input_values["control"])]
 
 class Fetcher(Component):
     def __init__(self, instructions):
         super(Fetcher, self).__init__()
-        self.name_ = "fetcher"
+
 
         self.add_input("address")
         self.add_input("clock")
-        self.add_output("instruction")
+        self.add_output("instruction", instruction.NOOP())
 
         self.instructions = instructions
-        self.set_output("instruction", instruction.NOOP())
 
-    def update(self, state):
-        if   state["clock"] == 1:
-            self.set_output("instruction", self.instructions[state["address"]])
-        elif state["clock"] == 0:
-            # Keep the output value the same
-            pass
+    def name(self):
+        return "fetcher"
+
+    def update(self, input_values, input_values_old):
+        if input_values["clock"] == 1 and \
+            input_values_old["clock"] != input_values["clock"]:
+
+            self.output_values["instruction"] = self.instructions[input_values["address"]]
 
 class RegisterFile:
     def __init__(self, num_registers):
@@ -275,118 +251,120 @@ class RegisterFile:
             self.set_output("read_data1", self.registers[state["read_sel1"]])
             self.set_output("read_data2", self.registers[state["read_sel2"]])
 
-class Decoder:
-    def __init__(self):
-        super(Decoder, self).__init__()
-        self.name_ = "Decoder"
+# class Decoder:
+#     def __init__(self):
+#         super(Decoder, self).__init__()
+#         self.name_ = "Decoder"
+#
+#         self.add_input("instruction")
+#
+#         '''
+#         next stage needs to know:
+#             ALU operation
+#             if its a branch or r->r
+#
+#             ALU source - goes into a tmux to decide which to add ie r0 + r1 or r0 + imm
+#         '''
+#
+#         self.add_output("read_sel1")
+#         self.add_output("read_sel2")
+#
+#         self.add_output("ALU_op")
+#
+#         self.add_output("WB_enable")
+#         self.add_output("WB_sel")
+#
+#     def clock(self):
+#         instr = self.instruction.get_value()
+#         print "Decoder recieved instruction {}".format(instr)
+#
+#         if  isinstance(instr, instruction.ADD) or \
+#             isinstance(instr, instruction.SUB) or \
+#             isinstance(instr, instruction.DIV) or \
+#             isinstance(instr, instruction.MUL) or \
+#             isinstance(instr, instruction.AND) or \
+#             isinstance(instr, instruction.OR)  or \
+#             isinstance(instr, instruction.XOR):
+#
+#             rd, rv0, rv1 = instr
+#
+#         if  isinstance(instr, instruction.ADDI) or \
+#             isinstance(instr, instruction.SUBI) or \
+#             isinstance(instr, instruction.DIVI) or \
+#             isinstance(instr, instruction.MULI) or \
+#             isinstance(instr, instruction.ANDI) or \
+#             isinstance(instr, instruction.ORI)  or \
+#             isinstance(instr, instruction.XORI):
+#
+#             rd, rv0, imm = instr
+#
+#         if  isinstance(instr, instruction.BEQ) or \
+#             isinstance(instr, instruction.BNE):
+#
+#             ad, rv0, rv1 = instr
+#
+#         if  isinstance(instr, instruction.BGEZ) or \
+#             isinstance(instr, instruction.BGTZ) or \
+#             isinstance(instr, instruction.BLEZ) or \
+#             isinstance(instr, instruction.BLTZ):
+#
+#             ad, rv0 = instr
+#
+#         if  isinstance(instr, instruction.J):
+#
+#             ad, = instr
+#
+#         if  isinstance(instr, instruction.JR):
+#
+#             rv, = instr
+#
+#         if  isinstance(instr, instruction.LOAD) or \
+#             isinstance(instr, instruction.STOR):
+#
+#             rf, rv, imm = instr
+#
+#         if  isinstance(instr, instruction.NOOP):
+#             pass
 
-        self.add_input("instruction")
 
-        '''
-        next stage needs to know:
-            ALU operation
-            if its a branch or r->r
+clock = Clock()
+PC    = Latch(0)
+incPC = Incrementer()
 
-            ALU source - goes into a tmux to decide which to add ie r0 + r1 or r0 + imm
-        '''
+PCmux      = Multiplexer(2)
+isbranch   = Constant(0) # 1
+branchaddr = Constant(1337) # 1337
 
-        self.add_output("read_sel1")
-        self.add_output("read_sel2")
+import programs.add_test
+fetcher = Fetcher(programs.add_test.instructions)
 
-        self.add_output("ALU_op")
+cco = ComponentConnectionOrchestrator()
+cco.add_component(clock)
+cco.add_component(PC)
+cco.add_component(incPC)
+cco.add_component(PCmux)
+cco.add_component(isbranch)
+cco.add_component(branchaddr)
+cco.add_component(fetcher)
 
-        self.add_output("WB_enable")
-        self.add_output("WB_sel")
+cco.add_connection((clock.id,"ph1"),(PC.id,   "clock"))
+cco.add_connection((PCmux.id,"out"),(PC.id,   "in"))
 
-    def clock(self):
-        instr = self.instruction.get_value()
-        print "Decoder recieved instruction {}".format(instr)
+cco.add_connection((PC.id,   "out"),(incPC.id,"in"))
 
-        if  isinstance(instr, instruction.ADD) or \
-            isinstance(instr, instruction.SUB) or \
-            isinstance(instr, instruction.DIV) or \
-            isinstance(instr, instruction.MUL) or \
-            isinstance(instr, instruction.AND) or \
-            isinstance(instr, instruction.OR)  or \
-            isinstance(instr, instruction.XOR):
+cco.add_connection((incPC.id,     "out"),(PCmux.id,"input_0"))
+cco.add_connection((branchaddr.id,"out"),(PCmux.id,"input_1"))
+cco.add_connection((isbranch.id,  "out"),(PCmux.id,"control"))
 
-            rd, rv0, rv1 = instr
+cco.add_connection((PC.id,   "out"),(fetcher.id,"address"))
+cco.add_connection((clock.id,"ph0"),(fetcher.id,"clock"))
 
-        if  isinstance(instr, instruction.ADDI) or \
-            isinstance(instr, instruction.SUBI) or \
-            isinstance(instr, instruction.DIVI) or \
-            isinstance(instr, instruction.MULI) or \
-            isinstance(instr, instruction.ANDI) or \
-            isinstance(instr, instruction.ORI)  or \
-            isinstance(instr, instruction.XORI):
+cco.propagate(clock.id)
 
-            rd, rv0, imm = instr
+def step():
+    clock.step()
+    cco.propagate(clock.id)
+    clock.step()
+    cco.propagate(clock.id)
 
-        if  isinstance(instr, instruction.BEQ) or \
-            isinstance(instr, instruction.BNE):
-
-            ad, rv0, rv1 = instr
-
-        if  isinstance(instr, instruction.BGEZ) or \
-            isinstance(instr, instruction.BGTZ) or \
-            isinstance(instr, instruction.BLEZ) or \
-            isinstance(instr, instruction.BLTZ):
-
-            ad, rv0 = instr
-
-        if  isinstance(instr, instruction.J):
-
-            ad, = instr
-
-        if  isinstance(instr, instruction.JR):
-
-            rv, = instr
-
-        if  isinstance(instr, instruction.LOAD) or \
-            isinstance(instr, instruction.STOR):
-
-            rf, rv, imm = instr
-
-        if  isinstance(instr, instruction.NOOP):
-            pass
-
-'''
-somehow do a post-setup check to verify everything is connected
-'''
-def test(instructions):
-    # Components
-    clock             = Clock()
-    PC                = Latch(value=0, name="PC")
-    incPC             = Incrementer()
-    PCmux             = Multiplexer(2, name="PC multiplexer")
-    isbranch          = Constant(0) # 1
-    branchaddr        = Constant(0) # 1337
-    fetcher           = Fetcher(instructions)
-    instruction_latch = Latch(value=instruction.NOOP(), name="instruction latch")
-
-    # Connections
-    PC.add_dependency(clock, "ph1", "clock")
-    PC.add_dependency(PCmux, "out", "in")
-
-    incPC.add_dependency(PC, "out", "in")
-
-    PCmux.add_dependency(incPC,      "out", "input_0")
-    PCmux.add_dependency(branchaddr, "out", "input_1")
-    PCmux.add_dependency(isbranch,   "out", "control")
-
-    fetcher.add_dependency(PC, "out", "address")
-    fetcher.add_dependency(clock, "ph0", "clock")
-
-    instruction_latch.add_dependency(fetcher, "instruction", "in")
-    instruction_latch.add_dependency(clock, "ph1", "clock")
-
-    # Need to first propagate signals through the system to init
-    # Alternatively we force inputs to be set to changed?
-    incPC.propagate()
-
-    def step():
-        while True:
-            clock.step()
-            yield
-
-    return clock, PC, incPC, PCmux, step()
+    cco.dump_component_states()
