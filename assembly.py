@@ -1,4 +1,3 @@
-import instruction
 from collections import namedtuple
 
 ADD  = namedtuple("ADD",  ["rd", "rv0", "rv1"])
