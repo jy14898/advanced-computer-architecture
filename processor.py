@@ -94,7 +94,7 @@ class ComponentConnectionOrchestrator(object):
         assert ((out_component, out_key), (in_component, in_key)) not in self.connections
         assert in_component in self.components
         assert out_component in self.components
-        assert out_key in out_component.output_keys
+        assert out_key in out_component.output_keys, "{} {}".format(out_key, out_component.name())
         assert in_key in in_component.input_keys
 
         self.connections.append(((out_component, out_key), (in_component, in_key)))
@@ -153,6 +153,13 @@ class ComponentConnectionOrchestrator(object):
         self.propagate()
         self.dump_component_outputs()
 
+
+    def step_multi(self):
+        i = raw_input("Enter e to stop. Enter nothing and press enter to step 1 phase ")
+        while i != "e":
+            self.step()
+            i = raw_input("Enter e to stop. Enter nothing and press enter to step 1 phase ")
+
     def dump_component_outputs(self):
         for component in self.components:
             print "{}:".format(component.name())
@@ -210,6 +217,42 @@ class LatchWithReset(Latch):
         # reset on any phase... not sure if this is good or bad
         if input_values["reset"] == 1:
             self.value = self.reset_value
+
+class PipelineBuffer(Component):
+    def __init__(self):
+        super(PipelineBuffer, self).__init__()
+
+        self.names = {}
+
+        self.add_input("reset")
+        self.add_input("freeze")
+
+        self.enable_clock()
+
+    def add_name(self, name, value):
+        assert name not in ["reset","freeze"]
+
+        self.add_input(name)
+        self.add_output(name)
+
+        self.names[name] = {
+            "value": value,
+            "default": value
+        }
+
+    def update_values(self, input_values):
+        return dict((k, v["value"]) for k, v in self.names.iteritems())
+
+
+    def update_state(self, input_values):
+        if input_values["clock"] == 0 and input_values["freeze"] == 0:
+            for name in self.names.keys():
+                self.names[name]["value"] = input_values[name]
+
+        if input_values["reset"] == 1:
+            for name in self.names.keys():
+                self.names[name]["value"] = self.names[name]["default"]
+
 
 class Incrementer(Component):
     def __init__(self):
@@ -396,8 +439,8 @@ class RegisterFile(Component):
 
         # NOTE to make it more obvious
         # TODO remove
-        self.registers = list(100 + i for i in xrange(num_registers))
-        self.registers[0] = 0
+        self.registers = list(0 for i in xrange(num_registers))
+        #self.registers[0] = 0
 
         self.add_input("reg_read_sel1")
         self.add_input("reg_read_sel2")
@@ -610,22 +653,24 @@ PCmux = Multiplexer(2)
 import programs.add_test
 fetcher = InstructionMemory(programs.add_test.instructions, clock_phase=1)
 
-instructionLatch = LatchWithReset(("NOOP",0,0,0,0), clock_phase=0)
+decode_buffer = PipelineBuffer()
+decode_buffer.add_name("instruction", ("NOOP",0,0,0,0))
+
 instructionSplit = InstructionSplit()
 
 decoder = Decoder()
 registerFile = RegisterFile(32, clock_phase=0)
 
-# NOTE need to bring through all of register file and decoders outputs into execute phase
-decoder_exec_latches = {}
-for out_key in ["WB_enable", "WB_EXEC_or_MEM", "ALU_op", "ALU_source", "is_branch", "branch_addr_or_reg", "MEM_write", "MEM_read"]:
-    decoder_exec_latches[out_key] = Latch("ADD" if out_key == "ALU_op" else 0, clock_phase=0)
-    decoder_exec_latches[out_key].name = functools.partial(lambda x: x, "{} latch Ex".format(out_key))
+execute_buffer_reset = Constant(0); execute_buffer_reset.name = lambda: "execute_buffer_reset"
+execute_buffer = PipelineBuffer()
+execute_buffer.add_name("reg_write_sel", 0)
+execute_buffer.add_name("immediate", 0)
 
-registerFile_exec_latches = {}
+for out_key in ["WB_enable", "WB_EXEC_or_MEM", "ALU_op", "ALU_source", "is_branch", "branch_addr_or_reg", "MEM_write", "MEM_read"]:
+    execute_buffer.add_name(out_key, "ADD" if out_key == "ALU_op" else 0)
+
 for out_key in ["read_data1","read_data2"]:
-    registerFile_exec_latches[out_key] = Latch(0, clock_phase=0)
-    registerFile_exec_latches[out_key].name = functools.partial(lambda x: x, "{} latch Ex".format(out_key))
+    execute_buffer.add_name(out_key, 0)
 
 alu = ALU()
 alu_source_mux = Multiplexer(2)
@@ -633,29 +678,27 @@ alu_source_mux = Multiplexer(2)
 branch_addr_mux = Multiplexer(2)
 do_branch = And(2)
 
-write_back_sel_ex = Latch(0, clock_phase=0)
-immediate_ex = Latch(0, clock_phase=0)
-
-write_back_sel_mem = Latch(0, clock_phase=0)
-alu_result_mem = Latch(0, clock_phase=0)
-write_data_mem = Latch(0, clock_phase=0)
-
-mem_write_mem = Latch(0, clock_phase=0)
-mem_read_mem = Latch(0, clock_phase=0)
-wb_enable_mem = Latch(0, clock_phase=0)
+mem_buffer_reset = Constant(0); mem_buffer_reset.name = lambda: "mem_buffer_reset"
+mem_buffer = PipelineBuffer()
+mem_buffer.add_name("reg_write_sel", 0)
+mem_buffer.add_name("alu_result", 0)
+mem_buffer.add_name("write_data", 0)
+mem_buffer.add_name("mem_write", 0)
+mem_buffer.add_name("mem_read", 0)
+mem_buffer.add_name("wb_enable", 0)
+mem_buffer.add_name("wb_exec_or_mem", 0)
 
 data_memory = DataMemory(programs.add_test.memory, clock_phase=1)
 
-write_back_sel_wb = Latch(0, clock_phase=0)
+wb_buffer_reset = Constant(0); wb_buffer_reset.name = lambda: "wb_buffer_reset"
+wb_buffer = PipelineBuffer()
+wb_buffer.add_name("write_back_sel",0)
+wb_buffer.add_name("alu_result",0)
+wb_buffer.add_name("mem_read_data",0)
+wb_buffer.add_name("wb_exec_or_mem",0)
+wb_buffer.add_name("wb_enable",0)
 
-alu_result_wb = Latch(0, clock_phase=0)
-mem_read_data_wb = Latch(0, clock_phase=0)
 wb_value_mux = Multiplexer(2)
-
-wb_exec_or_mem_mem = Latch(0, clock_phase=0)
-wb_exec_or_mem_wb  = Latch(0, clock_phase=0)
-
-wb_enable_wb = Latch(0, clock_phase=0)
 
 freeze_pipeline = Or(1)
 freeze_pipeline.name = lambda: "freeze pipeline"
@@ -664,29 +707,16 @@ freeze_pipeline.name = lambda: "freeze pipeline"
 PC.name               = lambda: "PC"
 incPC.name            = lambda: "inc PC"
 PCmux.name            = lambda: "PC mux"
-instructionLatch.name = lambda: "instruction latch"
+decode_buffer.name = lambda: "decode_buffer"
+execute_buffer.name = lambda: "execute_buffer"
 alu_source_mux.name   = lambda: "alu source mux"
 branch_addr_mux.name  = lambda: "branch address mux"
 do_branch.name        = lambda: "do branch"
-write_back_sel_ex.name = lambda: "write back sel Ex"
-immediate_ex.name = lambda: "immediate Ex"
-write_back_sel_mem.name = lambda: "write back sel Mem"
-alu_result_mem.name = lambda: "alu result Mem"
-write_data_mem.name = lambda: "write data Mem"
 
-mem_write_mem.name = lambda: "mem write Mem"
-mem_read_mem.name = lambda: "mem read Mem"
-wb_enable_mem.name = lambda: "WB enable Mem"
+mem_buffer.name = lambda: "mem_buffer"
 
-write_back_sel_wb.name = lambda: "write back sel Wb"
-write_back_sel_ex.name = lambda: "write back sel Ex"
-
-alu_result_wb.name = lambda: "alu result Wb"
-mem_read_data_wb.name = lambda: "mem read data Wb"
+wb_buffer.name = lambda: "wb_buffer"
 wb_value_mux.name = lambda: "wb value mux"
-wb_exec_or_mem_mem.name = lambda: "wb exec or mem Mem"
-wb_exec_or_mem_wb.name = lambda: "wb exec or mem Wb"
-wb_enable_wb.name = lambda: "wb enable Wb"
 
 
 # need to pass control signal to registerfile to tell it to write
@@ -696,42 +726,33 @@ cco.add_component(PC)
 cco.add_component(incPC)
 cco.add_component(PCmux)
 cco.add_component(fetcher)
-cco.add_component(instructionLatch)
+
+cco.add_component(decode_buffer)
+
 cco.add_component(instructionSplit)
 cco.add_component(decoder)
 cco.add_component(registerFile)
-cco.add_component(write_back_sel_ex)
-cco.add_component(immediate_ex)
+
+cco.add_component(execute_buffer_reset)
+cco.add_component(execute_buffer)
+
 cco.add_component(alu)
 cco.add_component(alu_source_mux)
 cco.add_component(branch_addr_mux)
 cco.add_component(do_branch)
 
-for component in decoder_exec_latches.values():
-    cco.add_component(component)
-
-for component in registerFile_exec_latches.values():
-    cco.add_component(component)
-
-cco.add_component(write_back_sel_mem)
-cco.add_component(alu_result_mem)
-cco.add_component(write_data_mem)
-cco.add_component(mem_write_mem)
-cco.add_component(mem_read_mem)
-cco.add_component(wb_enable_mem)
-cco.add_component(wb_exec_or_mem_mem)
+cco.add_component(mem_buffer_reset)
+cco.add_component(mem_buffer)
 
 cco.add_component(data_memory)
 
-cco.add_component(wb_exec_or_mem_wb)
-cco.add_component(write_back_sel_wb)
-
-cco.add_component(alu_result_wb)
-cco.add_component(mem_read_data_wb)
+cco.add_component(wb_buffer_reset)
+cco.add_component(wb_buffer)
 cco.add_component(wb_value_mux)
-cco.add_component(wb_enable_wb)
 
 cco.add_component(freeze_pipeline)
+
+############################# CONNECTIONS #############################
 
 cco.add_connection((alu,"busy"),(freeze_pipeline,"input_0"))
 
@@ -744,92 +765,75 @@ cco.add_connection((do_branch,  "out"),(PCmux,"control"))
 
 cco.add_connection((PC,   "out"),(fetcher,"address"))
 
-cco.add_connection((fetcher,"instruction"),(instructionLatch,"in"))
-cco.add_connection((do_branch, "out"), (instructionLatch, "reset"))
+cco.add_connection((fetcher,"instruction"),(decode_buffer,"instruction"))
+cco.add_connection((do_branch, "out"), (decode_buffer, "reset"))
 
-cco.add_connection((instructionLatch, "out"), (instructionSplit, "instruction"))
+cco.add_connection((decode_buffer, "instruction"), (instructionSplit, "instruction"))
 
 cco.add_connection((instructionSplit,"opcode"),(decoder,"opcode"))
 cco.add_connection((instructionSplit,"reg_read_sel1"),(registerFile,"reg_read_sel1"))
 cco.add_connection((instructionSplit,"reg_read_sel2"),(registerFile,"reg_read_sel2"))
 
-for out_key, component in decoder_exec_latches.iteritems():
-    cco.add_connection((decoder, out_key),(component, "in"))
-    cco.add_connection((freeze_pipeline, "out"),(component, "freeze"))
+for key in ["WB_enable", "WB_EXEC_or_MEM", "ALU_op", "ALU_source", "is_branch", "branch_addr_or_reg", "MEM_write", "MEM_read"]:
+    cco.add_connection((decoder, key),(execute_buffer, key))
 
-for out_key, component in registerFile_exec_latches.iteritems():
-    cco.add_connection((registerFile, out_key),(component, "in"))
-    cco.add_connection((freeze_pipeline, "out"),(component, "freeze"))
+for key in ["read_data1","read_data2"]:
+    cco.add_connection((registerFile, key),(execute_buffer, key))
 
-cco.add_connection((decoder_exec_latches["ALU_op"], "out"), (alu, "operation"))
-cco.add_connection((registerFile_exec_latches["read_data1"], "out"), (alu, "operand_a"))
+cco.add_connection((instructionSplit,"immediate"),    (execute_buffer, "immediate"))
+cco.add_connection((instructionSplit,"reg_write_sel"),(execute_buffer,"reg_write_sel"))
 
-cco.add_connection((instructionSplit,"immediate"),       (immediate_ex, "in"))
+cco.add_connection((execute_buffer_reset, "out"), (execute_buffer, "reset"))
 
-cco.add_connection((registerFile_exec_latches["read_data2"], "out"), (alu_source_mux, "input_0"))
-cco.add_connection((immediate_ex,"out"),       (alu_source_mux, "input_1"))
+cco.add_connection((execute_buffer, "ALU_op"), (alu, "operation"))
+cco.add_connection((execute_buffer, "read_data1"), (alu, "operand_a"))
 
-cco.add_connection((decoder_exec_latches["ALU_source"], "out"), (alu_source_mux, "control"))
+cco.add_connection((execute_buffer,"read_data2"), (alu_source_mux, "input_0"))
+cco.add_connection((execute_buffer,"immediate"),  (alu_source_mux, "input_1"))
+cco.add_connection((execute_buffer,"ALU_source"), (alu_source_mux, "control"))
+cco.add_connection((execute_buffer,"immediate"), (branch_addr_mux, "input_0"))
+cco.add_connection((execute_buffer,"read_data1"), (branch_addr_mux, "input_1"))
+cco.add_connection((execute_buffer,"branch_addr_or_reg"), (branch_addr_mux, "control"))
+cco.add_connection((execute_buffer,"is_branch"), (do_branch, "input_1"))
+cco.add_connection((execute_buffer,"MEM_write"),(mem_buffer,"mem_write"))
+cco.add_connection((execute_buffer,"MEM_read"),(mem_buffer,"mem_read"))
+cco.add_connection((execute_buffer,"WB_enable"),(mem_buffer,"wb_enable"))
+cco.add_connection((execute_buffer,"read_data2"),(mem_buffer,"write_data"))
+cco.add_connection((execute_buffer,"reg_write_sel"),(mem_buffer,"reg_write_sel"))
+cco.add_connection((execute_buffer,"WB_EXEC_or_MEM"),(mem_buffer, "wb_exec_or_mem"))
+
 
 cco.add_connection((alu_source_mux, "out"), (alu, "operand_b"))
-
-cco.add_connection((immediate_ex,"out"), (branch_addr_mux, "input_0"))
-cco.add_connection((registerFile_exec_latches["read_data1"], "out"), (branch_addr_mux, "input_1"))
-cco.add_connection((decoder_exec_latches["branch_addr_or_reg"], "out"), (branch_addr_mux, "control"))
-
 cco.add_connection((alu, "out"), (do_branch, "input_0"))
-cco.add_connection((decoder_exec_latches["is_branch"], "out"), (do_branch, "input_1"))
+cco.add_connection((alu,"out"),(mem_buffer,"alu_result"))
 
-cco.add_connection((decoder_exec_latches["MEM_write"],"out"),(mem_write_mem,"in"))
-cco.add_connection((decoder_exec_latches["MEM_read"],"out"),(mem_read_mem,"in"))
-cco.add_connection((decoder_exec_latches["WB_enable"],"out"),(wb_enable_mem,"in"))
+cco.add_connection((mem_buffer_reset, "out"), (mem_buffer, "reset"))
 
-cco.add_connection((alu,"out"),(alu_result_mem,"in"))
-cco.add_connection((registerFile_exec_latches["read_data2"],"out"),(write_data_mem,"in"))
+cco.add_connection((mem_buffer,"reg_write_sel"),(wb_buffer,"write_back_sel"))
+cco.add_connection((mem_buffer,"alu_result"),(data_memory,"address"))
+cco.add_connection((mem_buffer,"write_data"),(data_memory,"write_data"))
+cco.add_connection((mem_buffer,"mem_read"),(data_memory,"read"))
+cco.add_connection((mem_buffer,"mem_write"),(data_memory,"write"))
+cco.add_connection((mem_buffer,"alu_result"),(wb_buffer,"alu_result"))
+cco.add_connection((mem_buffer, "wb_exec_or_mem"),(wb_buffer, "wb_exec_or_mem"))
+cco.add_connection((mem_buffer, "wb_enable"),(wb_buffer, "wb_enable"))
 
-cco.add_connection((instructionSplit,"reg_write_sel"),(write_back_sel_ex,"in"))
-cco.add_connection((write_back_sel_ex,"out"),(write_back_sel_mem,"in"))
-cco.add_connection((write_back_sel_mem,"out"),(write_back_sel_wb,"in"))
-cco.add_connection((write_back_sel_wb,"out"),(registerFile,"write_sel"))
+cco.add_connection((wb_buffer_reset, "out"), (wb_buffer, "reset"))
 
-cco.add_connection((alu_result_mem,"out"),(data_memory,"address"))
-cco.add_connection((write_data_mem,"out"),(data_memory,"write_data"))
-
-cco.add_connection((mem_read_mem,"out"),(data_memory,"read"))
-cco.add_connection((mem_write_mem,"out"),(data_memory,"write"))
-
-cco.add_connection((alu_result_mem,"out"),(alu_result_wb,"in"))
-cco.add_connection((data_memory,"read_data"),(mem_read_data_wb,"in"))
-
-cco.add_connection((alu_result_wb,"out"),(wb_value_mux,"input_0"))
-cco.add_connection((mem_read_data_wb,"out"),(wb_value_mux,"input_1"))
-cco.add_connection((wb_exec_or_mem_wb,"out"),(wb_value_mux,"control"))
+cco.add_connection((data_memory,"read_data"),(wb_buffer,"mem_read_data"))
+cco.add_connection((wb_buffer,"write_back_sel"),(registerFile,"write_sel"))
+cco.add_connection((wb_buffer,"alu_result"),(wb_value_mux,"input_0"))
+cco.add_connection((wb_buffer,"mem_read_data"),(wb_value_mux,"input_1"))
+cco.add_connection((wb_buffer,"wb_exec_or_mem"),(wb_value_mux,"control"))
+cco.add_connection((wb_buffer, "wb_enable"),(registerFile, "write_enable"))
 
 cco.add_connection((wb_value_mux,"out"),(registerFile,"write_data"))
 
-cco.add_connection((decoder_exec_latches["WB_EXEC_or_MEM"], "out"),(wb_exec_or_mem_mem, "in"))
-cco.add_connection((wb_exec_or_mem_mem, "out"),(wb_exec_or_mem_wb, "in"))
-
-cco.add_connection((wb_enable_mem, "out"),(wb_enable_wb, "in"))
-cco.add_connection((wb_enable_wb, "out"),(registerFile, "write_enable"))
-
 cco.add_connection((freeze_pipeline,"out"),(PC,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(instructionLatch,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(write_back_sel_ex,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(immediate_ex,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(write_back_sel_mem,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(alu_result_mem,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(write_data_mem,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(mem_write_mem,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(mem_read_mem,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(wb_enable_mem,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(write_back_sel_wb,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(alu_result_wb,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(mem_read_data_wb,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(wb_exec_or_mem_mem,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(wb_exec_or_mem_wb,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(wb_enable_wb,"freeze"))
-
+cco.add_connection((freeze_pipeline,"out"),(decode_buffer,"freeze"))
+cco.add_connection((freeze_pipeline,"out"),(execute_buffer, "freeze"))
+cco.add_connection((freeze_pipeline,"out"),(mem_buffer,"freeze"))
+cco.add_connection((freeze_pipeline,"out"),(wb_buffer,"freeze"))
 cco.propagate(True)
 
 cco.generate_nomnoml()
