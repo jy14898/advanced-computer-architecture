@@ -1,0 +1,2849 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   id="processor"
+   font-family="monospace"
+   font-size="6"
+   version="1.1"
+   inkscape:version="0.91 r13725"
+   sodipodi:docname="svg.svg">
+  <metadata
+     id="metadata5169">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs5167" />
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1865"
+     inkscape:window-height="1056"
+     id="namedview5165"
+     showgrid="true"
+     inkscape:object-nodes="true"
+     inkscape:zoom="4"
+     inkscape:cx="747.72739"
+     inkscape:cy="158.04498"
+     inkscape:window-x="55"
+     inkscape:window-y="24"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g4139"
+     inkscape:snap-grids="true">
+    <inkscape:grid
+       type="xygrid"
+       id="grid5171" />
+  </sodipodi:namedview>
+  <style
+     id="style4137">
+
+.component .main {
+    fill: #FFFFFF;
+    stroke: #999999;
+}
+
+.connection {
+    fill: none;
+    stroke-width: 1;
+    stroke: #999999;
+}
+
+.connection:hover {
+    stroke-width: 2;
+    stroke: #FF0000;
+}
+
+.input_label:hover, .output_label:hover {
+    fill: #FF0000;
+}
+
+
+</style>
+  <g
+     class="svg-pan-zoom_viewport"
+     id="g4139">
+    <g
+       transform="translate(115,-80)"
+       class="component"
+       data-id="pc"
+       data-clocked="true"
+       id="g4141">
+      <text
+         x="0"
+         y="-14"
+         id="text4143">pc</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4145">(Latch)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="50"
+         height="30"
+         id="rect4147"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="in"
+         x="2"
+         y="11.5"
+         id="text4149">in</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4151"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="freeze"
+         x="2"
+         y="21.5"
+         id="text4153">freeze</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4155"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="48"
+         y="11.5"
+         id="text4157"
+         style="text-anchor:end">out</text>
+      <line
+         x1="50"
+         y1="10"
+         x2="55"
+         y2="10"
+         id="line4159"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 25,30 m -5,0 5,-5 5,5"
+         id="path4161"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(135,-125)"
+       class="component"
+       data-id="inc_pc"
+       data-clocked="false"
+       id="g4163">
+      <text
+         x="0"
+         y="-14"
+         id="text4165">inc_pc</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4167">(Incrementer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="30"
+         height="20"
+         id="rect4169"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="in"
+         x="2"
+         y="11.5"
+         id="text4171">in</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4173"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="28"
+         y="11.5"
+         id="text4175"
+         style="text-anchor:end">out</text>
+      <line
+         x1="30"
+         y1="10"
+         x2="35"
+         y2="10"
+         id="line4177"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(130,-200)"
+       class="component"
+       data-id="pc_mux"
+       data-clocked="false"
+       id="g4179">
+      <text
+         x="0"
+         y="-14"
+         id="text4181">pc_mux</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4183">(Multiplexer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="50"
+         height="40"
+         id="rect4185"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="input_0"
+         x="2"
+         y="11.5"
+         id="text4187">input_0</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4189"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="input_1"
+         x="2"
+         y="21.5"
+         id="text4191">input_1</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4193"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="control"
+         x="2"
+         y="31.5"
+         id="text4195">control</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4197"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="48"
+         y="11.5"
+         id="text4199"
+         style="text-anchor:end">out</text>
+      <line
+         x1="50"
+         y1="10"
+         x2="55"
+         y2="10"
+         id="line4201"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(175,-75)"
+       class="component"
+       data-id="fetcher"
+       data-clocked="true"
+       id="g4203">
+      <text
+         x="0"
+         y="-14"
+         id="text4205">fetcher</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4207">(InstructionMemory)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="90"
+         height="20"
+         id="rect4209"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="address"
+         x="2"
+         y="11.5"
+         id="text4211">address</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4213"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="instruction"
+         x="88"
+         y="11.5"
+         id="text4215"
+         style="text-anchor:end">instruction</text>
+      <line
+         x1="90"
+         y1="10"
+         x2="95"
+         y2="10"
+         id="line4217"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 45,20 m -5,0 5,-5 5,5"
+         id="path4219"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(285,-95)"
+       class="component"
+       data-id="decode_buffer"
+       data-clocked="true"
+       id="g4221">
+      <text
+         x="0"
+         y="-14"
+         id="text4223">decode_buffer</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4225">(PipelineBuffer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="50"
+         height="40"
+         id="rect4227"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="reset"
+         x="2"
+         y="11.5"
+         id="text4229">reset</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4231"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="freeze"
+         x="2"
+         y="21.5"
+         id="text4233">freeze</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4235"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="0"
+         y1="25"
+         x2="50"
+         y2="25"
+         id="line4237"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="instruction"
+         x="25"
+         y="31.5"
+         id="text4239"
+         style="text-anchor:middle">instruction</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4241"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="50"
+         y1="30"
+         x2="55"
+         y2="30"
+         id="line4243"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 25,40 m -5,0 5,-5 5,5"
+         id="path4245"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(350,-75)"
+       class="component"
+       data-id="instruction_split"
+       data-clocked="false"
+       id="g4247">
+      <text
+         x="0"
+         y="-14"
+         id="text4249">instruction_split</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4251">(InstructionSplit)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="80"
+         height="60"
+         id="rect4253"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="instruction"
+         x="2"
+         y="11.5"
+         id="text4255">instruction</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4257"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="opcode"
+         x="78"
+         y="11.5"
+         id="text4259"
+         style="text-anchor:end">opcode</text>
+      <line
+         x1="80"
+         y1="10"
+         x2="85"
+         y2="10"
+         id="line4261"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="reg_read_sel1"
+         x="78"
+         y="21.5"
+         id="text4263"
+         style="text-anchor:end">reg_read_sel1</text>
+      <line
+         x1="80"
+         y1="20"
+         x2="85"
+         y2="20"
+         id="line4265"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="reg_read_sel2"
+         x="78"
+         y="31.5"
+         id="text4267"
+         style="text-anchor:end">reg_read_sel2</text>
+      <line
+         x1="80"
+         y1="30"
+         x2="85"
+         y2="30"
+         id="line4269"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="reg_write_sel"
+         x="78"
+         y="41.5"
+         id="text4271"
+         style="text-anchor:end">reg_write_sel</text>
+      <line
+         x1="80"
+         y1="40"
+         x2="85"
+         y2="40"
+         id="line4273"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="immediate"
+         x="78"
+         y="51.5"
+         id="text4275"
+         style="text-anchor:end">immediate</text>
+      <line
+         x1="80"
+         y1="50"
+         x2="85"
+         y2="50"
+         id="line4277"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(475,-160)"
+       class="component"
+       data-id="decoder"
+       data-clocked="false"
+       id="g4279">
+      <text
+         x="0"
+         y="-14"
+         id="text4281">decoder</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4283">(Decoder)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="80"
+         height="90"
+         id="rect4285"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="opcode"
+         x="2"
+         y="11.5"
+         id="text4287">opcode</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4289"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="alu_op"
+         x="78"
+         y="11.5"
+         id="text4291"
+         style="text-anchor:end">alu_op</text>
+      <line
+         x1="80"
+         y1="10"
+         x2="85"
+         y2="10"
+         id="line4293"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="alu_source"
+         x="78"
+         y="21.5"
+         id="text4295"
+         style="text-anchor:end">alu_source</text>
+      <line
+         x1="80"
+         y1="20"
+         x2="85"
+         y2="20"
+         id="line4297"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="wb_enable"
+         x="78"
+         y="31.5"
+         id="text4299"
+         style="text-anchor:end">wb_enable</text>
+      <line
+         x1="80"
+         y1="30"
+         x2="85"
+         y2="30"
+         id="line4301"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="wb_exec_or_mem"
+         x="78"
+         y="41.5"
+         id="text4303"
+         style="text-anchor:end">wb_exec_or_mem</text>
+      <line
+         x1="80"
+         y1="40"
+         x2="85"
+         y2="40"
+         id="line4305"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="is_branch"
+         x="78"
+         y="51.5"
+         id="text4307"
+         style="text-anchor:end">is_branch</text>
+      <line
+         x1="80"
+         y1="50"
+         x2="85"
+         y2="50"
+         id="line4309"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="branch_imm_or_reg"
+         x="78"
+         y="61.5"
+         id="text4311"
+         style="text-anchor:end">branch_imm_or_reg</text>
+      <line
+         x1="80"
+         y1="60"
+         x2="85"
+         y2="60"
+         id="line4313"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="mem_write"
+         x="78"
+         y="71.5"
+         id="text4315"
+         style="text-anchor:end">mem_write</text>
+      <line
+         x1="80"
+         y1="70"
+         x2="85"
+         y2="70"
+         id="line4317"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="mem_read"
+         x="78"
+         y="81.5"
+         id="text4319"
+         style="text-anchor:end">mem_read</text>
+      <line
+         x1="80"
+         y1="80"
+         x2="85"
+         y2="80"
+         id="line4321"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(460,-20)"
+       class="component"
+       data-id="register_file"
+       data-clocked="true"
+       id="g4323">
+      <text
+         x="0"
+         y="-14"
+         id="text4325">register_file</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4327">(RegisterFile)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="100"
+         height="60"
+         id="rect4329"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="reg_read_sel1"
+         x="2"
+         y="11.5"
+         id="text4331">reg_read_sel1</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4333"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="reg_read_sel2"
+         x="2"
+         y="21.5"
+         id="text4335">reg_read_sel2</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4337"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="write_sel"
+         x="2"
+         y="31.5"
+         id="text4339">write_sel</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4341"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="write_enable"
+         x="2"
+         y="41.5"
+         id="text4343">write_enable</text>
+      <line
+         x1="-5"
+         y1="40"
+         x2="0"
+         y2="40"
+         id="line4345"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="write_data"
+         x="2"
+         y="51.5"
+         id="text4347">write_data</text>
+      <line
+         x1="-5"
+         y1="50"
+         x2="0"
+         y2="50"
+         id="line4349"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="read_data1"
+         x="98"
+         y="11.5"
+         id="text4351"
+         style="text-anchor:end">read_data1</text>
+      <line
+         x1="100"
+         y1="10"
+         x2="105"
+         y2="10"
+         id="line4353"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="read_data2"
+         x="98"
+         y="21.5"
+         id="text4355"
+         style="text-anchor:end">read_data2</text>
+      <line
+         x1="100"
+         y1="20"
+         x2="105"
+         y2="20"
+         id="line4357"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 50,60 m -5,0 5,-5 5,5"
+         id="path4359"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(610,-190)"
+       class="component"
+       data-id="execute_buffer_reset"
+       data-clocked="false"
+       id="g4361">
+      <text
+         x="0"
+         y="-14"
+         id="text4363">execute_buffer_reset</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4365">(Constant)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="20"
+         height="20"
+         id="rect4367"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="18"
+         y="11.5"
+         id="text4369"
+         style="text-anchor:end">out</text>
+      <line
+         x1="20"
+         y1="10"
+         x2="25"
+         y2="10"
+         id="line4371"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(610,-140)"
+       class="component"
+       data-id="execute_buffer"
+       data-clocked="true"
+       id="g4373">
+      <text
+         x="0"
+         y="-14"
+         id="text4375">execute_buffer</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4377">(PipelineBuffer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="70"
+         height="150"
+         id="rect4379"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="reset"
+         x="2"
+         y="11.5"
+         id="text4381">reset</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4383"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="freeze"
+         x="2"
+         y="21.5"
+         id="text4385">freeze</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4387"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="0"
+         y1="25"
+         x2="70"
+         y2="25"
+         id="line4389"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="reg_write_sel"
+         x="35"
+         y="31.5"
+         id="text4391"
+         style="text-anchor:middle">reg_write_sel</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4393"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="30"
+         x2="75"
+         y2="30"
+         id="line4395"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="immediate"
+         x="35"
+         y="41.5"
+         id="text4397"
+         style="text-anchor:middle">immediate</text>
+      <line
+         x1="-5"
+         y1="40"
+         x2="0"
+         y2="40"
+         id="line4399"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="40"
+         x2="75"
+         y2="40"
+         id="line4401"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="alu_op"
+         x="35"
+         y="51.5"
+         id="text4403"
+         style="text-anchor:middle">alu_op</text>
+      <line
+         x1="-5"
+         y1="50"
+         x2="0"
+         y2="50"
+         id="line4405"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="50"
+         x2="75"
+         y2="50"
+         id="line4407"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="alu_source"
+         x="35"
+         y="61.5"
+         id="text4409"
+         style="text-anchor:middle">alu_source</text>
+      <line
+         x1="-5"
+         y1="60"
+         x2="0"
+         y2="60"
+         id="line4411"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="60"
+         x2="75"
+         y2="60"
+         id="line4413"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="wb_enable"
+         x="35"
+         y="71.5"
+         id="text4415"
+         style="text-anchor:middle">wb_enable</text>
+      <line
+         x1="-5"
+         y1="70"
+         x2="0"
+         y2="70"
+         id="line4417"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="70"
+         x2="75"
+         y2="70"
+         id="line4419"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="wb_exec_or_mem"
+         x="35"
+         y="81.5"
+         id="text4421"
+         style="text-anchor:middle">wb_exec_or_mem</text>
+      <line
+         x1="-5"
+         y1="80"
+         x2="0"
+         y2="80"
+         id="line4423"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="80"
+         x2="75"
+         y2="80"
+         id="line4425"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="is_branch"
+         x="35"
+         y="91.5"
+         id="text4427"
+         style="text-anchor:middle">is_branch</text>
+      <line
+         x1="-5"
+         y1="90"
+         x2="0"
+         y2="90"
+         id="line4429"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="90"
+         x2="75"
+         y2="90"
+         id="line4431"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="branch_imm_or_reg"
+         x="35"
+         y="101.5"
+         id="text4433"
+         style="text-anchor:middle">branch_imm_or_reg</text>
+      <line
+         x1="-5"
+         y1="100"
+         x2="0"
+         y2="100"
+         id="line4435"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="100"
+         x2="75"
+         y2="100"
+         id="line4437"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="mem_write"
+         x="35"
+         y="111.5"
+         id="text4439"
+         style="text-anchor:middle">mem_write</text>
+      <line
+         x1="-5"
+         y1="110"
+         x2="0"
+         y2="110"
+         id="line4441"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="110"
+         x2="75"
+         y2="110"
+         id="line4443"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="mem_read"
+         x="35"
+         y="121.5"
+         id="text4445"
+         style="text-anchor:middle">mem_read</text>
+      <line
+         x1="-5"
+         y1="120"
+         x2="0"
+         y2="120"
+         id="line4447"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="120"
+         x2="75"
+         y2="120"
+         id="line4449"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="read_data1"
+         x="35"
+         y="131.5"
+         id="text4451"
+         style="text-anchor:middle">read_data1</text>
+      <line
+         x1="-5"
+         y1="130"
+         x2="0"
+         y2="130"
+         id="line4453"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="130"
+         x2="75"
+         y2="130"
+         id="line4455"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="read_data2"
+         x="35"
+         y="141.5"
+         id="text4457"
+         style="text-anchor:middle">read_data2</text>
+      <line
+         x1="-5"
+         y1="140"
+         x2="0"
+         y2="140"
+         id="line4459"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="140"
+         x2="75"
+         y2="140"
+         id="line4461"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 35,150 m -5,0 5,-5 5,5"
+         id="path4463"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(800,-40)"
+       class="component"
+       data-id="alu"
+       data-clocked="true"
+       id="g4465">
+      <text
+         x="0"
+         y="-14"
+         id="text4467">alu</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4469">(ALU)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="70"
+         height="40"
+         id="rect4471"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="operand_a"
+         x="2"
+         y="11.5"
+         id="text4473">operand_a</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4475"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="operand_b"
+         x="2"
+         y="21.5"
+         id="text4477">operand_b</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4479"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="operation"
+         x="2"
+         y="31.5"
+         id="text4481">operation</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4483"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="68"
+         y="11.5"
+         id="text4485"
+         style="text-anchor:end">out</text>
+      <line
+         x1="70"
+         y1="10"
+         x2="75"
+         y2="10"
+         id="line4487"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="busy"
+         x="68"
+         y="21.5"
+         id="text4489"
+         style="text-anchor:end">busy</text>
+      <line
+         x1="70"
+         y1="20"
+         x2="75"
+         y2="20"
+         id="line4491"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 35,40 m -5,0 5,-5 5,5"
+         id="path4493"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(800,-105)"
+       class="component"
+       data-id="alu_source_mux"
+       data-clocked="false"
+       id="g4495">
+      <text
+         x="0"
+         y="-14"
+         id="text4497">alu_source_mux</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4499">(Multiplexer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="60"
+         height="40"
+         id="rect4501"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="input_0"
+         x="2"
+         y="11.5"
+         id="text4503">input_0</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4505"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="input_1"
+         x="2"
+         y="21.5"
+         id="text4507">input_1</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4509"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="control"
+         x="2"
+         y="31.5"
+         id="text4511">control</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4513"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="58"
+         y="11.5"
+         id="text4515"
+         style="text-anchor:end">out</text>
+      <line
+         x1="60"
+         y1="10"
+         x2="65"
+         y2="10"
+         id="line4517"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(800,-165)"
+       class="component"
+       data-id="branch_addr_mux"
+       data-clocked="false"
+       id="g4519">
+      <text
+         x="0"
+         y="-14"
+         id="text4521">branch_addr_mux</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4523">(Multiplexer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="60"
+         height="40"
+         id="rect4525"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="input_0"
+         x="2"
+         y="11.5"
+         id="text4527">input_0</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4529"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="input_1"
+         x="2"
+         y="21.5"
+         id="text4531">input_1</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4533"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="control"
+         x="2"
+         y="31.5"
+         id="text4535">control</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4537"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="58"
+         y="11.5"
+         id="text4539"
+         style="text-anchor:end">out</text>
+      <line
+         x1="60"
+         y1="10"
+         x2="65"
+         y2="10"
+         id="line4541"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(365,-270)"
+       class="component"
+       data-id="do_branch"
+       data-clocked="false"
+       id="g4543">
+      <text
+         x="0"
+         y="-14"
+         id="text4545">do_branch</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4547">(And)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="60"
+         height="30"
+         id="rect4549"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="input_0"
+         x="2"
+         y="11.5"
+         id="text4551">input_0</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4553"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="input_1"
+         x="2"
+         y="21.5"
+         id="text4555">input_1</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4557"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="58"
+         y="11.5"
+         id="text4559"
+         style="text-anchor:end">out</text>
+      <line
+         x1="60"
+         y1="10"
+         x2="65"
+         y2="10"
+         id="line4561"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(1000,-160)"
+       class="component"
+       data-id="mem_buffer_reset"
+       data-clocked="false"
+       id="g4563">
+      <text
+         x="0"
+         y="-14"
+         id="text4565">mem_buffer_reset</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4567">(Constant)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="20"
+         height="20"
+         id="rect4569"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="18"
+         y="11.5"
+         id="text4571"
+         style="text-anchor:end">out</text>
+      <line
+         x1="20"
+         y1="10"
+         x2="25"
+         y2="10"
+         id="line4573"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(1010,-100)"
+       class="component"
+       data-id="mem_buffer"
+       data-clocked="true"
+       id="g4575">
+      <text
+         x="0"
+         y="-14"
+         id="text4577">mem_buffer</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4579">(PipelineBuffer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="70"
+         height="100"
+         id="rect4581"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="reset"
+         x="2"
+         y="11.5"
+         id="text4583">reset</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4585"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="freeze"
+         x="2"
+         y="21.5"
+         id="text4587">freeze</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4589"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="0"
+         y1="25"
+         x2="70"
+         y2="25"
+         id="line4591"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="reg_write_sel"
+         x="35"
+         y="31.5"
+         id="text4593"
+         style="text-anchor:middle">reg_write_sel</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4595"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="30"
+         x2="75"
+         y2="30"
+         id="line4597"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="mem_write"
+         x="35"
+         y="41.5"
+         id="text4599"
+         style="text-anchor:middle">mem_write</text>
+      <line
+         x1="-5"
+         y1="40"
+         x2="0"
+         y2="40"
+         id="line4601"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="40"
+         x2="75"
+         y2="40"
+         id="line4603"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="mem_read"
+         x="35"
+         y="51.5"
+         id="text4605"
+         style="text-anchor:middle">mem_read</text>
+      <line
+         x1="-5"
+         y1="50"
+         x2="0"
+         y2="50"
+         id="line4607"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="50"
+         x2="75"
+         y2="50"
+         id="line4609"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="wb_enable"
+         x="35"
+         y="61.5"
+         id="text4611"
+         style="text-anchor:middle">wb_enable</text>
+      <line
+         x1="-5"
+         y1="60"
+         x2="0"
+         y2="60"
+         id="line4613"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="60"
+         x2="75"
+         y2="60"
+         id="line4615"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="wb_exec_or_mem"
+         x="35"
+         y="71.5"
+         id="text4617"
+         style="text-anchor:middle">wb_exec_or_mem</text>
+      <line
+         x1="-5"
+         y1="70"
+         x2="0"
+         y2="70"
+         id="line4619"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="70"
+         x2="75"
+         y2="70"
+         id="line4621"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="alu_result"
+         x="35"
+         y="81.5"
+         id="text4623"
+         style="text-anchor:middle">alu_result</text>
+      <line
+         x1="-5"
+         y1="80"
+         x2="0"
+         y2="80"
+         id="line4625"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="80"
+         x2="75"
+         y2="80"
+         id="line4627"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="write_data"
+         x="35"
+         y="91.5"
+         id="text4629"
+         style="text-anchor:middle">write_data</text>
+      <line
+         x1="-5"
+         y1="90"
+         x2="0"
+         y2="90"
+         id="line4631"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="90"
+         x2="75"
+         y2="90"
+         id="line4633"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 35,100 m -5,0 5,-5 5,5"
+         id="path4635"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(1115,-70)"
+       class="component"
+       data-id="data_memory"
+       data-clocked="true"
+       id="g4637">
+      <text
+         x="0"
+         y="-14"
+         id="text4639">data_memory</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4641">(DataMemory)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="80"
+         height="50"
+         id="rect4643"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="write"
+         x="2"
+         y="11.5"
+         id="text4645">write</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4647"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="read"
+         x="2"
+         y="21.5"
+         id="text4649">read</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4651"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="address"
+         x="2"
+         y="31.5"
+         id="text4653">address</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4655"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="write_data"
+         x="2"
+         y="41.5"
+         id="text4657">write_data</text>
+      <line
+         x1="-5"
+         y1="40"
+         x2="0"
+         y2="40"
+         id="line4659"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="read_data"
+         x="78"
+         y="11.5"
+         id="text4661"
+         style="text-anchor:end">read_data</text>
+      <line
+         x1="80"
+         y1="10"
+         x2="85"
+         y2="10"
+         id="line4663"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 40,50 m -5,0 5,-5 5,5"
+         id="path4665"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(1220,-160)"
+       class="component"
+       data-id="wb_buffer_reset"
+       data-clocked="false"
+       id="g4667">
+      <text
+         x="0"
+         y="-14"
+         id="text4669">wb_buffer_reset</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4671">(Constant)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="20"
+         height="20"
+         id="rect4673"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="18"
+         y="11.5"
+         id="text4675"
+         style="text-anchor:end">out</text>
+      <line
+         x1="20"
+         y1="10"
+         x2="25"
+         y2="10"
+         id="line4677"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(1230,-80)"
+       class="component"
+       data-id="wb_buffer"
+       data-clocked="true"
+       id="g4679">
+      <text
+         x="0"
+         y="-14"
+         id="text4681">wb_buffer</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4683">(PipelineBuffer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="70"
+         height="80"
+         id="rect4685"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="reset"
+         x="2"
+         y="11.5"
+         id="text4687">reset</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4689"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="freeze"
+         x="2"
+         y="21.5"
+         id="text4691">freeze</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4693"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="0"
+         y1="25"
+         x2="70"
+         y2="25"
+         id="line4695"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="reg_write_sel"
+         x="35"
+         y="31.5"
+         id="text4697"
+         style="text-anchor:middle">reg_write_sel</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4699"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="30"
+         x2="75"
+         y2="30"
+         id="line4701"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="mem_read_data"
+         x="35"
+         y="41.5"
+         id="text4703"
+         style="text-anchor:middle">mem_read_data</text>
+      <line
+         x1="-5"
+         y1="40"
+         x2="0"
+         y2="40"
+         id="line4705"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="40"
+         x2="75"
+         y2="40"
+         id="line4707"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="wb_enable"
+         x="35"
+         y="51.5"
+         id="text4709"
+         style="text-anchor:middle">wb_enable</text>
+      <line
+         x1="-5"
+         y1="50"
+         x2="0"
+         y2="50"
+         id="line4711"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="50"
+         x2="75"
+         y2="50"
+         id="line4713"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="wb_exec_or_mem"
+         x="35"
+         y="61.5"
+         id="text4715"
+         style="text-anchor:middle">wb_exec_or_mem</text>
+      <line
+         x1="-5"
+         y1="60"
+         x2="0"
+         y2="60"
+         id="line4717"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="60"
+         x2="75"
+         y2="60"
+         id="line4719"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label output_label"
+         data-key="alu_result"
+         x="35"
+         y="71.5"
+         id="text4721"
+         style="text-anchor:middle">alu_result</text>
+      <line
+         x1="-5"
+         y1="70"
+         x2="0"
+         y2="70"
+         id="line4723"
+         style="stroke:#999999;stroke-width:1" />
+      <line
+         x1="70"
+         y1="70"
+         x2="75"
+         y2="70"
+         id="line4725"
+         style="stroke:#999999;stroke-width:1" />
+      <path
+         d="m 35,80 m -5,0 5,-5 5,5"
+         id="path4727"
+         inkscape:connector-curvature="0"
+         style="fill:none;stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(1370,-70)"
+       class="component"
+       data-id="wb_value_mux"
+       data-clocked="false"
+       id="g4729">
+      <text
+         x="0"
+         y="-14"
+         id="text4731">wb_value_mux</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4733">(Multiplexer)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="60"
+         height="40"
+         id="rect4735"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="input_0"
+         x="2"
+         y="11.5"
+         id="text4737">input_0</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4739"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="input_1"
+         x="2"
+         y="21.5"
+         id="text4741">input_1</text>
+      <line
+         x1="-5"
+         y1="20"
+         x2="0"
+         y2="20"
+         id="line4743"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="input_label"
+         data-key="control"
+         x="2"
+         y="31.5"
+         id="text4745">control</text>
+      <line
+         x1="-5"
+         y1="30"
+         x2="0"
+         y2="30"
+         id="line4747"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="58"
+         y="11.5"
+         id="text4749"
+         style="text-anchor:end">out</text>
+      <line
+         x1="60"
+         y1="10"
+         x2="65"
+         y2="10"
+         id="line4751"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <g
+       transform="translate(805,-420)"
+       class="component"
+       data-id="freeze_pipeline"
+       data-clocked="false"
+       id="g4753">
+      <text
+         x="0"
+         y="-14"
+         id="text4755">freeze_pipeline</text>
+      <text
+         x="0"
+         y="-4"
+         id="text4757">(Or)</text>
+      <rect
+         class="main"
+         x="0"
+         y="0"
+         width="60"
+         height="20"
+         id="rect4759"
+         style="fill:#ffffff;stroke:#999999" />
+      <text
+         class="input_label"
+         data-key="input_0"
+         x="2"
+         y="11.5"
+         id="text4761">input_0</text>
+      <line
+         x1="-5"
+         y1="10"
+         x2="0"
+         y2="10"
+         id="line4763"
+         style="stroke:#999999;stroke-width:1" />
+      <text
+         class="output_label"
+         data-key="out"
+         x="58"
+         y="11.5"
+         id="text4765"
+         style="text-anchor:end">out</text>
+      <line
+         x1="60"
+         y1="10"
+         x2="65"
+         y2="10"
+         id="line4767"
+         style="stroke:#999999;stroke-width:1" />
+    </g>
+    <path
+       d="m 875,-20 55,0 40,-310 -170,0 0,-80"
+       class="connection"
+       data-from="[alu,busy]"
+       data-to="[freeze_pipeline,input_0]"
+       id="path4769"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="m 185,-190 0,-35 -75,0 0,155 0,0"
+       class="connection"
+       data-from="[pc_mux,out]"
+       data-to="[pc,in]"
+       id="path4775"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="m 170,-70 0,-25 -40,0 0,-20"
+       class="connection"
+       data-from="[pc,out]"
+       data-to="[inc_pc,in]"
+       id="path4781"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccc" />
+    <path
+       d="m 170,-115 15,0 0,-30 -70,0 0,-45 10,0"
+       class="connection"
+       data-from="[inc_pc,out]"
+       data-to="[pc_mux,input_0]"
+       id="path4787"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccc" />
+    <path
+       d="m 865,-155 0,-125 -225,0 -420,130 -100,0 0,-30 5,0"
+       class="connection"
+       data-from="[branch_addr_mux,out]"
+       data-to="[pc_mux,input_1]"
+       id="path4793"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccccc" />
+    <path
+       d="m 430,-260 0,40 -215,65 -90,0 0,-15 0,0"
+       class="connection"
+       data-from="[do_branch,out]"
+       data-to="[pc_mux,control]"
+       id="path4799"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccc" />
+    <path
+       d="m 170,-70 0,5"
+       class="connection"
+       data-from="[pc,out]"
+       data-to="[fetcher,address]"
+       id="path4805"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 270,-65 10,0"
+       class="connection"
+       data-from="[fetcher,instruction]"
+       data-to="[decode_buffer,instruction]"
+       id="path4811"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 310,-150 -30,30 0,35"
+       class="connection"
+       data-from="[do_branch,out]"
+       data-to="[decode_buffer,reset]"
+       id="path4817"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccc" />
+    <text
+       x="332.57718"
+       y="-152.82843"
+       id="text4819"
+       style="text-anchor:end">do_branch[out]</text>
+    <path
+       d="m 340,-65 5,0"
+       class="connection"
+       data-from="[decode_buffer,instruction]"
+       data-to="[instruction_split,instruction]"
+       id="path4823"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 435,-65 35,-85"
+       class="connection"
+       data-from="[instruction_split,opcode]"
+       data-to="[decoder,opcode]"
+       id="path4829"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 435,-55 20,45"
+       class="connection"
+       data-from="[instruction_split,reg_read_sel1]"
+       data-to="[register_file,reg_read_sel1]"
+       id="path4835"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="M 435,-45 455,0"
+       class="connection"
+       data-from="[instruction_split,reg_read_sel2]"
+       data-to="[register_file,reg_read_sel2]"
+       id="path4841"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-130 45,60"
+       class="connection"
+       data-from="[decoder,wb_enable]"
+       data-to="[execute_buffer,wb_enable]"
+       id="path4847"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-120 45,60"
+       class="connection"
+       data-from="[decoder,wb_exec_or_mem]"
+       data-to="[execute_buffer,wb_exec_or_mem]"
+       id="path4853"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-150 45,60"
+       class="connection"
+       data-from="[decoder,alu_op]"
+       data-to="[execute_buffer,alu_op]"
+       id="path4859"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-140 45,60"
+       class="connection"
+       data-from="[decoder,alu_source]"
+       data-to="[execute_buffer,alu_source]"
+       id="path4865"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-110 45,60"
+       class="connection"
+       data-from="[decoder,is_branch]"
+       data-to="[execute_buffer,is_branch]"
+       id="path4871"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-100 45,60"
+       class="connection"
+       data-from="[decoder,branch_imm_or_reg]"
+       data-to="[execute_buffer,branch_imm_or_reg]"
+       id="path4877"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-90 45,60"
+       class="connection"
+       data-from="[decoder,mem_write]"
+       data-to="[execute_buffer,mem_write]"
+       id="path4883"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 560,-80 45,60"
+       class="connection"
+       data-from="[decoder,mem_read]"
+       data-to="[execute_buffer,mem_read]"
+       id="path4889"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 565,-10 40,0"
+       class="connection"
+       data-from="[register_file,read_data1]"
+       data-to="[execute_buffer,read_data1]"
+       id="path4895"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 565,0 40,0"
+       class="connection"
+       data-from="[register_file,read_data2]"
+       data-to="[execute_buffer,read_data2]"
+       id="path4901"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cc" />
+    <path
+       d="m 435,-25 20,-20 105,0 45,-55"
+       class="connection"
+       data-from="[instruction_split,immediate]"
+       data-to="[execute_buffer,immediate]"
+       id="path4907"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccc" />
+    <path
+       d="m 435,-35 20,-20 105,0 45,-55"
+       class="connection"
+       data-from="[instruction_split,reg_write_sel]"
+       data-to="[execute_buffer,reg_write_sel]"
+       id="path4913"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccc" />
+    <path
+       d="m 635,-180 0,15 -30,0 0,35"
+       class="connection"
+       data-from="[execute_buffer_reset,out]"
+       data-to="[execute_buffer,reset]"
+       id="path4919"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccc" />
+    <path
+       d="m 685,-90 35,0 65,0 0,80 10,0"
+       class="connection"
+       data-from="[execute_buffer,alu_op]"
+       data-to="[alu,operation]"
+       id="path4925"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="m 685,-10 2.9375,0 1.0625,-2 2,0 1,2 1,0 1,-2 2,0 1,2 1,0 1,-2 2,0 1,2 1,0 1,-2 2,0 1,2 65.9375,0 1.0625,-2 2,0 1,2 3,0 0,-20 3.1875,0 0.8125,-2 2,0 1,2 1,0 1,-2 2,0 1,2 3,0"
+       class="connection"
+       data-from="[execute_buffer,read_data1]"
+       data-to="[alu,operand_a]"
+       id="path4931"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccccccccccccccccccccccccccccc" />
+    <path
+       d="m 685,0 3,0 1,-2 2,0 1,2 1,0 1,-2 2,0 1,2 1,0 1,-2 2,0 1,2 1,0 1,-2 2,0 1,2 68,0 0,-95 20,0"
+       class="connection"
+       data-from="[execute_buffer,read_data2]"
+       data-to="[alu_source_mux,input_0]"
+       id="path4937"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccccccccccccccccc" />
+    <path
+       d="m 685,-100 95,0 15,15"
+       class="connection"
+       data-from="[execute_buffer,immediate]"
+       data-to="[alu_source_mux,input_1]"
+       id="path4943"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccc" />
+    <path
+       d="m 685,-80 105,0 5,5"
+       class="connection"
+       data-from="[execute_buffer,alu_source]"
+       data-to="[alu_source_mux,control]"
+       id="path4949"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccc" />
+    <path
+       d="m 685,-100 20,-50 90,-5"
+       class="connection"
+       data-from="[execute_buffer,immediate]"
+       data-to="[branch_addr_mux,input_0]"
+       id="path4955"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccc" />
+    <path
+       d="m 685,-10 2.9375,0 1.0625,-2 2,0 1,2 1,0 1,-2 2,0 1,2 1,0 1,-2 2,0 1,2 1,0 1,-2 2,0 1,2 3,0 0,-130 85,-5"
+       class="connection"
+       data-from="[execute_buffer,read_data1]"
+       data-to="[branch_addr_mux,input_1]"
+       id="path4961"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccccccccccccccccc" />
+    <path
+       d="m 685,-40 30,-90 80,-5"
+       class="connection"
+       data-from="[execute_buffer,branch_imm_or_reg]"
+       data-to="[branch_addr_mux,control]"
+       id="path4967"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccc" />
+    <path
+       d="m 685,-50 35,-170 -360,-10 0,-20"
+       class="connection"
+       data-from="[execute_buffer,is_branch]"
+       data-to="[do_branch,input_1]"
+       id="path4973"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccc" />
+    <path
+       d="m 685,-30 10,0 0,70 240,0 70,-100"
+       class="connection"
+       data-from="[execute_buffer,mem_write]"
+       data-to="[mem_buffer,mem_write]"
+       id="path4979"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="m 685,-20 5,0 0,70 245,0 70,-100"
+       class="connection"
+       data-from="[execute_buffer,mem_read]"
+       data-to="[mem_buffer,mem_read]"
+       id="path4985"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="m 685,-70 20,0 0,90 225,0 20,20 55,-80"
+       class="connection"
+       data-from="[execute_buffer,wb_enable]"
+       data-to="[mem_buffer,wb_enable]"
+       id="path4991"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccc" />
+    <path
+       d="m 685,0 0,60 275,0 45,-70"
+       class="connection"
+       data-from="[execute_buffer,read_data2]"
+       data-to="[mem_buffer,write_data]"
+       id="path4997"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccc" />
+    <path
+       d="m 685,-110 30,0 0,120 230,0 60,-80"
+       class="connection"
+       data-from="[execute_buffer,reg_write_sel]"
+       data-to="[mem_buffer,reg_write_sel]"
+       id="path5003"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="m 685,-60 15,0 0,90 230,0 20,20 55,-80"
+       class="connection"
+       data-from="[execute_buffer,wb_exec_or_mem]"
+       data-to="[mem_buffer,wb_exec_or_mem]"
+       id="path5009"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccc" />
+    <path
+       d="m 865,-95 0,35 -75,0 0,40 5,0"
+       class="connection"
+       data-from="[alu_source_mux,out]"
+       data-to="[alu,operand_b]"
+       id="path5015"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="m 875,-30 0,-35 -35,-155 -140,-95 -340,0 0,55"
+       class="connection"
+       data-from="[alu,out]"
+       data-to="[do_branch,input_0]"
+       id="path5021"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="cccccc" />
+    <path
+       d="m 875,-30 80,0 50,10"
+       class="connection"
+       data-from="[alu,out]"
+       data-to="[mem_buffer,alu_result]"
+       id="path5027"
+       inkscape:connector-curvature="0"
+       style="fill:none;stroke:#999999;stroke-width:1"
+       sodipodi:nodetypes="ccc" />
+    <path
+       d="M0 880 l20 0"
+       class="connection"
+       data-from="[mem_buffer_reset,out]"
+       data-to="[mem_buffer,reset]"
+       id="path5033" />
+    <text
+       x="-5"
+       y="880"
+       text-anchor="end"
+       id="text5035">mem_buffer_reset[out]</text>
+    <text
+       x="25"
+       y="880"
+       id="text5037">mem_buffer[reset]</text>
+    <path
+       d="M0 900 l20 0"
+       class="connection"
+       data-from="[mem_buffer,reg_write_sel]"
+       data-to="[wb_buffer,reg_write_sel]"
+       id="path5039" />
+    <text
+       x="-5"
+       y="900"
+       text-anchor="end"
+       id="text5041">mem_buffer[reg_write_sel]</text>
+    <text
+       x="25"
+       y="900"
+       id="text5043">wb_buffer[reg_write_sel]</text>
+    <path
+       d="M0 920 l20 0"
+       class="connection"
+       data-from="[mem_buffer,alu_result]"
+       data-to="[data_memory,address]"
+       id="path5045" />
+    <text
+       x="-5"
+       y="920"
+       text-anchor="end"
+       id="text5047">mem_buffer[alu_result]</text>
+    <text
+       x="25"
+       y="920"
+       id="text5049">data_memory[address]</text>
+    <path
+       d="M0 940 l20 0"
+       class="connection"
+       data-from="[mem_buffer,write_data]"
+       data-to="[data_memory,write_data]"
+       id="path5051" />
+    <text
+       x="-5"
+       y="940"
+       text-anchor="end"
+       id="text5053">mem_buffer[write_data]</text>
+    <text
+       x="25"
+       y="940"
+       id="text5055">data_memory[write_data]</text>
+    <path
+       d="M0 960 l20 0"
+       class="connection"
+       data-from="[mem_buffer,mem_read]"
+       data-to="[data_memory,read]"
+       id="path5057" />
+    <text
+       x="-5"
+       y="960"
+       text-anchor="end"
+       id="text5059">mem_buffer[mem_read]</text>
+    <text
+       x="25"
+       y="960"
+       id="text5061">data_memory[read]</text>
+    <path
+       d="M0 980 l20 0"
+       class="connection"
+       data-from="[mem_buffer,mem_write]"
+       data-to="[data_memory,write]"
+       id="path5063" />
+    <text
+       x="-5"
+       y="980"
+       text-anchor="end"
+       id="text5065">mem_buffer[mem_write]</text>
+    <text
+       x="25"
+       y="980"
+       id="text5067">data_memory[write]</text>
+    <path
+       d="M0 1000 l20 0"
+       class="connection"
+       data-from="[mem_buffer,alu_result]"
+       data-to="[wb_buffer,alu_result]"
+       id="path5069" />
+    <text
+       x="-5"
+       y="1000"
+       text-anchor="end"
+       id="text5071">mem_buffer[alu_result]</text>
+    <text
+       x="25"
+       y="1000"
+       id="text5073">wb_buffer[alu_result]</text>
+    <path
+       d="M0 1020 l20 0"
+       class="connection"
+       data-from="[mem_buffer,wb_exec_or_mem]"
+       data-to="[wb_buffer,wb_exec_or_mem]"
+       id="path5075" />
+    <text
+       x="-5"
+       y="1020"
+       text-anchor="end"
+       id="text5077">mem_buffer[wb_exec_or_mem]</text>
+    <text
+       x="25"
+       y="1020"
+       id="text5079">wb_buffer[wb_exec_or_mem]</text>
+    <path
+       d="M0 1040 l20 0"
+       class="connection"
+       data-from="[mem_buffer,wb_enable]"
+       data-to="[wb_buffer,wb_enable]"
+       id="path5081" />
+    <text
+       x="-5"
+       y="1040"
+       text-anchor="end"
+       id="text5083">mem_buffer[wb_enable]</text>
+    <text
+       x="25"
+       y="1040"
+       id="text5085">wb_buffer[wb_enable]</text>
+    <path
+       d="M0 1060 l20 0"
+       class="connection"
+       data-from="[wb_buffer_reset,out]"
+       data-to="[wb_buffer,reset]"
+       id="path5087" />
+    <text
+       x="-5"
+       y="1060"
+       text-anchor="end"
+       id="text5089">wb_buffer_reset[out]</text>
+    <text
+       x="25"
+       y="1060"
+       id="text5091">wb_buffer[reset]</text>
+    <path
+       d="M0 1080 l20 0"
+       class="connection"
+       data-from="[data_memory,read_data]"
+       data-to="[wb_buffer,mem_read_data]"
+       id="path5093" />
+    <text
+       x="-5"
+       y="1080"
+       text-anchor="end"
+       id="text5095">data_memory[read_data]</text>
+    <text
+       x="25"
+       y="1080"
+       id="text5097">wb_buffer[mem_read_data]</text>
+    <path
+       d="M0 1100 l20 0"
+       class="connection"
+       data-from="[wb_buffer,reg_write_sel]"
+       data-to="[register_file,write_sel]"
+       id="path5099" />
+    <text
+       x="-5"
+       y="1100"
+       text-anchor="end"
+       id="text5101">wb_buffer[reg_write_sel]</text>
+    <text
+       x="25"
+       y="1100"
+       id="text5103">register_file[write_sel]</text>
+    <path
+       d="M0 1120 l20 0"
+       class="connection"
+       data-from="[wb_buffer,alu_result]"
+       data-to="[wb_value_mux,input_0]"
+       id="path5105" />
+    <text
+       x="-5"
+       y="1120"
+       text-anchor="end"
+       id="text5107">wb_buffer[alu_result]</text>
+    <text
+       x="25"
+       y="1120"
+       id="text5109">wb_value_mux[input_0]</text>
+    <path
+       d="M0 1140 l20 0"
+       class="connection"
+       data-from="[wb_buffer,mem_read_data]"
+       data-to="[wb_value_mux,input_1]"
+       id="path5111" />
+    <text
+       x="-5"
+       y="1140"
+       text-anchor="end"
+       id="text5113">wb_buffer[mem_read_data]</text>
+    <text
+       x="25"
+       y="1140"
+       id="text5115">wb_value_mux[input_1]</text>
+    <path
+       d="M0 1160 l20 0"
+       class="connection"
+       data-from="[wb_buffer,wb_exec_or_mem]"
+       data-to="[wb_value_mux,control]"
+       id="path5117" />
+    <text
+       x="-5"
+       y="1160"
+       text-anchor="end"
+       id="text5119">wb_buffer[wb_exec_or_mem]</text>
+    <text
+       x="25"
+       y="1160"
+       id="text5121">wb_value_mux[control]</text>
+    <path
+       d="M0 1180 l20 0"
+       class="connection"
+       data-from="[wb_buffer,wb_enable]"
+       data-to="[register_file,write_enable]"
+       id="path5123" />
+    <text
+       x="-5"
+       y="1180"
+       text-anchor="end"
+       id="text5125">wb_buffer[wb_enable]</text>
+    <text
+       x="25"
+       y="1180"
+       id="text5127">register_file[write_enable]</text>
+    <path
+       d="M0 1200 l20 0"
+       class="connection"
+       data-from="[wb_value_mux,out]"
+       data-to="[register_file,write_data]"
+       id="path5129" />
+    <text
+       x="-5"
+       y="1200"
+       text-anchor="end"
+       id="text5131">wb_value_mux[out]</text>
+    <text
+       x="25"
+       y="1200"
+       id="text5133">register_file[write_data]</text>
+    <path
+       d="M0 1220 l20 0"
+       class="connection"
+       data-from="[freeze_pipeline,out]"
+       data-to="[pc,freeze]"
+       id="path5135" />
+    <text
+       x="-5"
+       y="1220"
+       text-anchor="end"
+       id="text5137">freeze_pipeline[out]</text>
+    <text
+       x="25"
+       y="1220"
+       id="text5139">pc[freeze]</text>
+    <path
+       d="M0 1240 l20 0"
+       class="connection"
+       data-from="[freeze_pipeline,out]"
+       data-to="[decode_buffer,freeze]"
+       id="path5141" />
+    <text
+       x="-5"
+       y="1240"
+       text-anchor="end"
+       id="text5143">freeze_pipeline[out]</text>
+    <text
+       x="25"
+       y="1240"
+       id="text5145">decode_buffer[freeze]</text>
+    <path
+       d="M0 1260 l20 0"
+       class="connection"
+       data-from="[freeze_pipeline,out]"
+       data-to="[execute_buffer,freeze]"
+       id="path5147" />
+    <text
+       x="-5"
+       y="1260"
+       text-anchor="end"
+       id="text5149">freeze_pipeline[out]</text>
+    <text
+       x="25"
+       y="1260"
+       id="text5151">execute_buffer[freeze]</text>
+    <path
+       d="M0 1280 l20 0"
+       class="connection"
+       data-from="[freeze_pipeline,out]"
+       data-to="[mem_buffer,freeze]"
+       id="path5153" />
+    <text
+       x="-5"
+       y="1280"
+       text-anchor="end"
+       id="text5155">freeze_pipeline[out]</text>
+    <text
+       x="25"
+       y="1280"
+       id="text5157">mem_buffer[freeze]</text>
+    <path
+       d="M0 1300 l20 0"
+       class="connection"
+       data-from="[freeze_pipeline,out]"
+       data-to="[wb_buffer,freeze]"
+       id="path5159" />
+    <text
+       x="-5"
+       y="1300"
+       text-anchor="end"
+       id="text5161">freeze_pipeline[out]</text>
+    <text
+       x="25"
+       y="1300"
+       id="text5163">wb_buffer[freeze]</text>
+  </g>
+</svg>

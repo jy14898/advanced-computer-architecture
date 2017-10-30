@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>SVG</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/css/bootstrap.min.css" integrity="sha384-PsH8R72JQ3SOdhVi3uxftmaW6Vc51MKb0q5P2rRUpPvrszuE4W1povHYgTpBfshb" crossorigin="anonymous">
+    <style media="screen">
+      html, body { margin:0; padding:0; overflow:hidden }
+      #top { position:fixed; top:0; left:0; height:100%; width:100% }
+      object { position:absolute; top:0; left:0; height: 100%; width:100% }
+      #gui {
+        background-color: #cbcbcb;
+        color: #474747;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.5.3/dist/svg-pan-zoom.min.js" ></script>
+  </head>
+  <body>
+    <div id="top" class="container-fluid">
+      <div class="row" style="height: 100%;">
+        <div id="gui" class="pt-3 col-2">
+          <p>Hello</p>
+          <button type="button" class="btn btn-primary">Primary</button>
+        </div>
+        <div class="col-10">
+          <object id="processorobj" data="svg.svg" type="image/svg+xml">
+        </div>
+        </object>
+      </div>
+    </div>
+    <script>
+    //<![CDATA[
+    console.log("a")
+    document.querySelector('#processorobj').addEventListener('load', function(){
+      var svgdocument = document.querySelector('#processorobj').contentDocument
+
+      // remove inline styles inkscape added on paths:
+      svgdocument.querySelectorAll('.connection').forEach(function(el){
+        el.removeAttribute('style')
+      })
+
+      svgdocument.querySelectorAll('.component').forEach(function(el){
+        el.removeAttribute('style')
+      })
+
+      svgPanZoom(svgdocument.querySelector('#processor'), {
+        zoomEnabled: true,
+        fit: true,
+        center: true,
+        // viewportSelector: document.getElementById('demo-tiger').querySelector('#g4') // this option will make library to misbehave. Viewport should have no transform attribute
+      });
+    })
+    //]]>
+    </script>
+  </body>
+</html>

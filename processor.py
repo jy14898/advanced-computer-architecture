@@ -1,6 +1,7 @@
 import functools
 import json
 
+from collections import OrderedDict
 
 # -a note someone made here:http://slideplayer.com/slide/9255919/
 # -https://www.cise.ufl.edu/~mssz/CompOrg/Figure5.6-PipelineControlLines.gif
@@ -14,9 +15,6 @@ class Component(object):
 
         self.clocked = False
 
-    def name(self):
-        return "component"
-
     '''
     dont actually use this yet
     '''
@@ -24,11 +22,11 @@ class Component(object):
         return {}
 
     def update_values(self, input_values):
-        raise NotImplementedError('{}: Components must override update_values()!'.format(self.name()))
+        raise NotImplementedError('Components must override update_values()!')
 
     def update_state(self, input_values):
         assert self.clocked == True
-        raise NotImplementedError('{}: Components must override update_state()!'.format(self.name()))
+        raise NotImplementedError('Components must override update_state()!')
 
     def add_input(self, key):
         self.input_keys.append(key)
@@ -41,42 +39,6 @@ class Component(object):
         self.clocked = True
 
 class ComponentConnectionOrchestrator(object):
-    def generate_drawio(self):
-        for ((out_component, out_key), (in_component, in_key)) in self.connections:
-            print "#{" + "\"from\": \"{}\", \"to\": \"{}\", \"label\": \"{} -> {}\"".format(out_component.name(), in_component.name(), out_key, in_key) + "}"
-
-        print "name"
-        for component in self.components:
-            print "{}".format(component.name())
-
-        # connect:
-    def generate_nomnoml(self):
-        print "NOMNOML START"
-
-        for component in self.components:
-            print "[{}]".format(component.name())
-
-        for ((out_component, out_key), (in_component, in_key)) in self.connections:
-            print "[{}] {} -> {} [{}]".format(out_component.name(), out_key, in_key, in_component.name())
-
-    def generate_json(self):
-        ob = {}
-
-        ob["components"] = {}
-
-        for component in self.components:
-            ob["components"][id(component)] = {
-                "name": component.name(),
-                "input_keys": component.input_keys,
-                "output_keys": component.output_keys
-            }
-
-        ob["connections"] = []
-        for ((out_component, out_key), (in_component, in_key)) in self.connections:
-            ob["connections"].append([id(out_component), out_key, id(in_component), in_key])
-
-        print json.dumps(ob)
-
     def __init__(self):
         self.components = []
         self.connections = [
@@ -86,6 +48,7 @@ class ComponentConnectionOrchestrator(object):
         self.clock_phase = 0
 
     def add_component(self, component):
+        assert isinstance(component, Component)
         assert component not in self.components
 
         self.components.append(component)
@@ -94,7 +57,7 @@ class ComponentConnectionOrchestrator(object):
         assert ((out_component, out_key), (in_component, in_key)) not in self.connections
         assert in_component in self.components
         assert out_component in self.components
-        assert out_key in out_component.output_keys, "{} {}".format(out_key, out_component.name())
+        assert out_key in out_component.output_keys, "{} {}".format(out_key, out_component)
         assert in_key in in_component.input_keys
 
         self.connections.append(((out_component, out_key), (in_component, in_key)))
@@ -137,8 +100,8 @@ class ComponentConnectionOrchestrator(object):
                         raise
 
                 for out_key in component.output_keys:
-                    assert out_key in output_values, "{} output missing key {}".format(component.name(), out_key)
-                    assert output_values[out_key] is not None, "{} {}".format(component.name(), out_key)
+                    assert out_key in output_values, "{} output missing key {}".format(component, out_key)
+                    assert output_values[out_key] is not None, "{} {}".format(component, out_key)
 
                     if output_values[out_key] != component.output_values[out_key]:
                         changed = True
@@ -151,7 +114,7 @@ class ComponentConnectionOrchestrator(object):
     def step(self):
         self.clock()
         self.propagate()
-        self.dump_component_outputs()
+        # self.dump_component_outputs()
 
 
     def step_multi(self):
@@ -159,12 +122,6 @@ class ComponentConnectionOrchestrator(object):
         while i != "e":
             self.step()
             i = raw_input("Enter e to stop. Enter nothing and press enter to step 1 phase ")
-
-    def dump_component_outputs(self):
-        for component in self.components:
-            print "{}:".format(component.name())
-            for out_key in component.output_keys:
-                print "    {} = {}".format(out_key, component.output_values[out_key])
 
 class Latch(Component):
     def __init__(self, value, clock_phase):
@@ -185,9 +142,6 @@ class Latch(Component):
             "value": self.value
         }
 
-    def name(self):
-        return "latch"
-
     def update_values(self, input_values):
         return {
             "out": self.value
@@ -206,9 +160,6 @@ class LatchWithReset(Latch):
         # print self.value
         self.reset_value = value
 
-    def name(self):
-        return "latch with reset"
-
     def update_state(self, input_values):
         if input_values["clock"] == self.clock_phase:
             if input_values["reset"] == 0:
@@ -222,7 +173,7 @@ class PipelineBuffer(Component):
     def __init__(self):
         super(PipelineBuffer, self).__init__()
 
-        self.names = {}
+        self.names = OrderedDict()
 
         self.add_input("reset")
         self.add_input("freeze")
@@ -261,9 +212,6 @@ class Incrementer(Component):
         self.add_input("in")
         self.add_output("out")
 
-    def name(self):
-        return "incrementer"
-
     def update_values(self, input_values):
         return {
             "out": input_values["in"] + 1
@@ -275,9 +223,6 @@ class Constant(Component):
 
         self.add_output("out")
         self.value = value
-
-    def name(self):
-        return "constant"
 
     def update_values(self, input_values):
         return {
@@ -293,9 +238,6 @@ class And(Component):
 
         self.add_output("out")
 
-    def name(self):
-        return "and"
-
     def update_values(self, input_values):
         return {
             "out": 1 if all(input_values[k] for k in self.input_keys) else 0
@@ -309,9 +251,6 @@ class Or(Component):
             self.add_input("input_{}".format(i))
 
         self.add_output("out")
-
-    def name(self):
-        return "or"
 
     def update_values(self, input_values):
         return {
@@ -327,9 +266,6 @@ class Multiplexer(Component):
 
         self.add_input("control")
         self.add_output("out")
-
-    def name(self):
-        return "multiplexer"
 
     def update_values(self, input_values):
         return {
@@ -361,9 +297,6 @@ class DataMemory(Component):
             "read_data": self.read_data,
             "memory": self.memory
         }
-
-    def name(self):
-        return "DataMemory"
 
     def update_values(self, input_values):
         return {
@@ -401,9 +334,6 @@ class InstructionMemory(Component):
             "instruction": self.instruction,
         }
 
-    def name(self):
-        return "InstructionMemory"
-
     def update_values(self, input_values):
         return {
             "instruction": self.instruction
@@ -424,23 +354,14 @@ class InstructionSplit(Component):
         for key in InstructionSplit.instruction_keys:
             self.add_output(key)
 
-    def name(self):
-        return "instruction split"
-
     def update_values(self, input_values):
         return dict(zip(InstructionSplit.instruction_keys,input_values["instruction"]))
 
 class RegisterFile(Component):
-    def name(self):
-        return "register file"
-
     def __init__(self, num_registers, clock_phase):
         super(RegisterFile, self).__init__()
 
-        # NOTE to make it more obvious
-        # TODO remove
         self.registers = list(0 for i in xrange(num_registers))
-        #self.registers[0] = 0
 
         self.add_input("reg_read_sel1")
         self.add_input("reg_read_sel2")
@@ -477,9 +398,6 @@ class RegisterFile(Component):
                 self.registers[input_values["write_sel"]] = input_values["write_data"]
 
 class ALU(Component):
-    def name(self):
-        return "ALU"
-
     def __init__(self):
         super(ALU, self).__init__()
 
@@ -533,7 +451,6 @@ class ALU(Component):
     def compute(inputs, operation):
         return ALU.operations[operation](inputs)
 
-    # i think real ALUs take both phases, but mine will just use 1 phase? what about division
     def update_values(self, input_values):
         return {
             "busy": 1 if self.cycles_left > 0 else 0,
@@ -553,11 +470,8 @@ class ALU(Component):
 
 
 class Decoder(Component):
-    def name(self):
-        return "decoder"
-
     @staticmethod
-    def get_ALU_op(opcode):
+    def get_alu_op(opcode):
         # NOTE this only works because none of them begin with B or end with I
         if opcode[-1:] == "I":
             return opcode[:-1]
@@ -571,269 +485,242 @@ class Decoder(Component):
 
         self.add_input("opcode")
 
-        self.add_output("ALU_op")
-        self.add_output("ALU_source") # 0 = read_sel2 1 = immediate
+        self.add_output("alu_op")
+        self.add_output("alu_source") # 0 = read_sel2 1 = immediate
 
-        self.add_output("WB_enable")
-        self.add_output("WB_EXEC_or_MEM")
+        self.add_output("wb_enable")
+        self.add_output("wb_exec_or_mem")
 
         self.add_output("is_branch")
-        self.add_output("branch_addr_or_reg")
+        self.add_output("branch_imm_or_reg")
 
-        self.add_output("MEM_write")
-        self.add_output("MEM_read")
+        self.add_output("mem_write")
+        self.add_output("mem_read")
 
     def update_values(self, input_values):
         opcode = input_values["opcode"]
 
         output_values = {
-            "WB_enable": 0,
-            "WB_EXEC_or_MEM": 0,
-            "ALU_op": "ADD",
-            "ALU_source": 0,
+            "wb_enable": 0,
+            "wb_exec_or_mem": 0,
+            "alu_op": "ADD",
+            "alu_source": 0,
             "is_branch": 0,
-            "branch_addr_or_reg": 0,
-            "MEM_write": 0,
-            "MEM_read":  0
+            "branch_imm_or_reg": 0,
+            "mem_write": 0,
+            "mem_read":  0
         }
 
         if  opcode in ["ADD","SUB","DIV","MUL","AND","OR" ,"XOR"]:
-            output_values["WB_enable"]  = 1
+            output_values["wb_enable"]  = 1
 
-            output_values["ALU_op"]     = Decoder.get_ALU_op(opcode)
+            output_values["alu_op"]     = Decoder.get_alu_op(opcode)
 
         elif opcode in ["ADDI","SUBI","DIVI","MULI","ANDI","ORI","XORI"]:
-            output_values["WB_enable"]  = 1
+            output_values["wb_enable"]  = 1
 
-            output_values["ALU_op"]     = Decoder.get_ALU_op(opcode)
-            output_values["ALU_source"] = 1
+            output_values["alu_op"]     = Decoder.get_alu_op(opcode)
+            output_values["alu_source"] = 1
 
         elif opcode in ["BEQ","BNE"]:
-            output_values["ALU_op"]    = Decoder.get_ALU_op(opcode)
+            output_values["alu_op"]    = Decoder.get_alu_op(opcode)
 
             output_values["is_branch"] = 1
 
         elif opcode in ["BGEZ","BGTZ","BLEZ","BLTZ"]:
-            output_values["ALU_op"]    = Decoder.get_ALU_op(opcode)
+            output_values["alu_op"]    = Decoder.get_alu_op(opcode)
 
             output_values["is_branch"] = 1
 
         elif opcode in ["J"]:
-            output_values["ALU_op"]    = "TRUE"
+            output_values["alu_op"]    = "TRUE"
 
             output_values["is_branch"] = 1
 
         elif opcode in ["JR"]:
-            output_values["ALU_op"]    = "TRUE"
+            output_values["alu_op"]    = "TRUE"
 
             output_values["is_branch"] = 1
-            output_values["branch_addr_or_reg"] = 1
+            output_values["branch_imm_or_reg"] = 1
 
         elif opcode in ["LOAD"]:
-            output_values["WB_enable"]      = 1
-            output_values["WB_EXEC_or_MEM"] = 1
+            output_values["wb_enable"]      = 1
+            output_values["wb_exec_or_mem"] = 1
 
-            output_values["ALU_op"]     = "ADD"
-            output_values["ALU_source"] = 1
+            output_values["alu_op"]     = "ADD"
+            output_values["alu_source"] = 1
 
-            output_values["MEM_read"]  = 1
+            output_values["mem_read"]  = 1
 
         elif opcode in ["STOR"]:
-            output_values["ALU_op"]     = "ADD"
-            output_values["ALU_source"] = 1
+            output_values["alu_op"]     = "ADD"
+            output_values["alu_source"] = 1
 
-            output_values["MEM_write"] = 1
+            output_values["mem_write"] = 1
 
         return output_values
 
-PC    = Latch(0, clock_phase=0)
-incPC = Incrementer()
-PCmux = Multiplexer(2)
+class Processor(ComponentConnectionOrchestrator):
+    def __getitem__(self, key):
+        return self.object_lookup[key]
 
-import programs.add_test
-fetcher = InstructionMemory(programs.add_test.instructions, clock_phase=1)
+    def get_name(self, component):
+        return self.name_lookup[component]
 
-decode_buffer = PipelineBuffer()
-decode_buffer.add_name("instruction", ("NOOP",0,0,0,0))
+    def __setitem__(self, key, value):
+        self.add_component(value)
+        self.object_lookup[key] = value
+        self.name_lookup[value] = key
 
-instructionSplit = InstructionSplit()
+    def add_connection(self, (out_name, out_key), (in_name, in_key)):
+        out_component = self[out_name]
+        in_component  = self[in_name]
+        super(Processor, self).add_connection((out_component, out_key), (in_component, in_key))
 
-decoder = Decoder()
-registerFile = RegisterFile(32, clock_phase=0)
+    def __init__(self, instructions, data):
+        super(Processor, self).__init__()
 
-execute_buffer_reset = Constant(0); execute_buffer_reset.name = lambda: "execute_buffer_reset"
-execute_buffer = PipelineBuffer()
-execute_buffer.add_name("reg_write_sel", 0)
-execute_buffer.add_name("immediate", 0)
+        self.object_lookup = {}
+        self.name_lookup = {}
 
-for out_key in ["WB_enable", "WB_EXEC_or_MEM", "ALU_op", "ALU_source", "is_branch", "branch_addr_or_reg", "MEM_write", "MEM_read"]:
-    execute_buffer.add_name(out_key, "ADD" if out_key == "ALU_op" else 0)
+        p = self
 
-for out_key in ["read_data1","read_data2"]:
-    execute_buffer.add_name(out_key, 0)
+        p["pc"] = Latch(0, clock_phase=0)
+        p["inc_pc"] = Incrementer()
+        p["pc_mux"] = Multiplexer(2)
 
-alu = ALU()
-alu_source_mux = Multiplexer(2)
+        p["fetcher"] = InstructionMemory(instructions, clock_phase=1)
 
-branch_addr_mux = Multiplexer(2)
-do_branch = And(2)
+        p["decode_buffer"] = PipelineBuffer()
+        p["decode_buffer"].add_name("instruction", ("NOOP",0,0,0,0))
 
-mem_buffer_reset = Constant(0); mem_buffer_reset.name = lambda: "mem_buffer_reset"
-mem_buffer = PipelineBuffer()
-mem_buffer.add_name("reg_write_sel", 0)
-mem_buffer.add_name("alu_result", 0)
-mem_buffer.add_name("write_data", 0)
-mem_buffer.add_name("mem_write", 0)
-mem_buffer.add_name("mem_read", 0)
-mem_buffer.add_name("wb_enable", 0)
-mem_buffer.add_name("wb_exec_or_mem", 0)
+        p["instruction_split"] = InstructionSplit()
 
-data_memory = DataMemory(programs.add_test.memory, clock_phase=1)
+        p["decoder"] = Decoder()
+        p["register_file"] = RegisterFile(32, clock_phase=0)
 
-wb_buffer_reset = Constant(0); wb_buffer_reset.name = lambda: "wb_buffer_reset"
-wb_buffer = PipelineBuffer()
-wb_buffer.add_name("write_back_sel",0)
-wb_buffer.add_name("alu_result",0)
-wb_buffer.add_name("mem_read_data",0)
-wb_buffer.add_name("wb_exec_or_mem",0)
-wb_buffer.add_name("wb_enable",0)
+        p["execute_buffer_reset"] = Constant(0)
+        p["execute_buffer"] = PipelineBuffer()
+        p["execute_buffer"].add_name("reg_write_sel", 0)
+        p["execute_buffer"].add_name("immediate", 0)
 
-wb_value_mux = Multiplexer(2)
+        for out_key in ["alu_op", "alu_source", "wb_enable", "wb_exec_or_mem", "is_branch", "branch_imm_or_reg", "mem_write", "mem_read"]:
+            p["execute_buffer"].add_name(out_key, "ADD" if out_key == "alu_op" else 0)
 
-freeze_pipeline = Or(1)
-freeze_pipeline.name = lambda: "freeze pipeline"
+        for out_key in ["read_data1","read_data2"]:
+            p["execute_buffer"].add_name(out_key, 0)
 
-# Setup names for debugging
-PC.name               = lambda: "PC"
-incPC.name            = lambda: "inc PC"
-PCmux.name            = lambda: "PC mux"
-decode_buffer.name = lambda: "decode_buffer"
-execute_buffer.name = lambda: "execute_buffer"
-alu_source_mux.name   = lambda: "alu source mux"
-branch_addr_mux.name  = lambda: "branch address mux"
-do_branch.name        = lambda: "do branch"
+        p["alu"] = ALU()
+        p["alu_source_mux"] = Multiplexer(2)
 
-mem_buffer.name = lambda: "mem_buffer"
+        p["branch_addr_mux"] = Multiplexer(2)
+        p["do_branch"] = And(2)
 
-wb_buffer.name = lambda: "wb_buffer"
-wb_value_mux.name = lambda: "wb value mux"
+        p["mem_buffer_reset"] = Constant(0)
+        p["mem_buffer"] = PipelineBuffer()
+        p["mem_buffer"].add_name("reg_write_sel", 0)
+        p["mem_buffer"].add_name("mem_write", 0)
+        p["mem_buffer"].add_name("mem_read", 0)
+        p["mem_buffer"].add_name("wb_enable", 0)
+        p["mem_buffer"].add_name("wb_exec_or_mem", 0)
+        p["mem_buffer"].add_name("alu_result", 0)
+        p["mem_buffer"].add_name("write_data", 0)
 
+        p["data_memory"] = DataMemory(data, clock_phase=1)
 
-# need to pass control signal to registerfile to tell it to write
+        p["wb_buffer_reset"] = Constant(0)
+        p["wb_buffer"] = PipelineBuffer()
+        p["wb_buffer"].add_name("reg_write_sel",0)
+        p["wb_buffer"].add_name("mem_read_data",0)
+        p["wb_buffer"].add_name("wb_enable",0)
+        p["wb_buffer"].add_name("wb_exec_or_mem",0)
+        p["wb_buffer"].add_name("alu_result",0)
 
-cco = ComponentConnectionOrchestrator()
-cco.add_component(PC)
-cco.add_component(incPC)
-cco.add_component(PCmux)
-cco.add_component(fetcher)
+        p["wb_value_mux"] = Multiplexer(2)
 
-cco.add_component(decode_buffer)
+        p["freeze_pipeline"] = Or(1)
 
-cco.add_component(instructionSplit)
-cco.add_component(decoder)
-cco.add_component(registerFile)
+        ############################# CONNECTIONS #############################
 
-cco.add_component(execute_buffer_reset)
-cco.add_component(execute_buffer)
+        p.add_connection(("alu","busy"),("freeze_pipeline","input_0"))
 
-cco.add_component(alu)
-cco.add_component(alu_source_mux)
-cco.add_component(branch_addr_mux)
-cco.add_component(do_branch)
+        p.add_connection(("pc_mux","out"),("pc",   "in"))
+        p.add_connection(("pc",   "out"),("inc_pc","in"))
 
-cco.add_component(mem_buffer_reset)
-cco.add_component(mem_buffer)
+        p.add_connection(("inc_pc",     "out"),("pc_mux","input_0"))
+        p.add_connection(("branch_addr_mux","out"),("pc_mux","input_1"))
+        p.add_connection(("do_branch",  "out"),("pc_mux","control"))
 
-cco.add_component(data_memory)
+        p.add_connection(("pc",   "out"),("fetcher","address"))
 
-cco.add_component(wb_buffer_reset)
-cco.add_component(wb_buffer)
-cco.add_component(wb_value_mux)
+        p.add_connection(("fetcher","instruction"),("decode_buffer","instruction"))
+        p.add_connection(("do_branch", "out"), ("decode_buffer", "reset"))
 
-cco.add_component(freeze_pipeline)
+        p.add_connection(("decode_buffer", "instruction"), ("instruction_split", "instruction"))
 
-############################# CONNECTIONS #############################
+        p.add_connection(("instruction_split","opcode"),("decoder","opcode"))
+        p.add_connection(("instruction_split","reg_read_sel1"),("register_file","reg_read_sel1"))
+        p.add_connection(("instruction_split","reg_read_sel2"),("register_file","reg_read_sel2"))
 
-cco.add_connection((alu,"busy"),(freeze_pipeline,"input_0"))
+        for key in ["wb_enable", "wb_exec_or_mem", "alu_op", "alu_source", "is_branch", "branch_imm_or_reg", "mem_write", "mem_read"]:
+            p.add_connection(("decoder", key),("execute_buffer", key))
 
-cco.add_connection((PCmux,"out"),(PC,   "in"))
-cco.add_connection((PC,   "out"),(incPC,"in"))
+        for key in ["read_data1","read_data2"]:
+            p.add_connection(("register_file", key),("execute_buffer", key))
 
-cco.add_connection((incPC,     "out"),(PCmux,"input_0"))
-cco.add_connection((branch_addr_mux,"out"),(PCmux,"input_1"))
-cco.add_connection((do_branch,  "out"),(PCmux,"control"))
+        p.add_connection(("instruction_split","immediate"),    ("execute_buffer", "immediate"))
+        p.add_connection(("instruction_split","reg_write_sel"),("execute_buffer","reg_write_sel"))
 
-cco.add_connection((PC,   "out"),(fetcher,"address"))
+        p.add_connection(("execute_buffer_reset", "out"), ("execute_buffer", "reset"))
 
-cco.add_connection((fetcher,"instruction"),(decode_buffer,"instruction"))
-cco.add_connection((do_branch, "out"), (decode_buffer, "reset"))
+        p.add_connection(("execute_buffer", "alu_op"), ("alu", "operation"))
+        p.add_connection(("execute_buffer", "read_data1"), ("alu", "operand_a"))
 
-cco.add_connection((decode_buffer, "instruction"), (instructionSplit, "instruction"))
-
-cco.add_connection((instructionSplit,"opcode"),(decoder,"opcode"))
-cco.add_connection((instructionSplit,"reg_read_sel1"),(registerFile,"reg_read_sel1"))
-cco.add_connection((instructionSplit,"reg_read_sel2"),(registerFile,"reg_read_sel2"))
-
-for key in ["WB_enable", "WB_EXEC_or_MEM", "ALU_op", "ALU_source", "is_branch", "branch_addr_or_reg", "MEM_write", "MEM_read"]:
-    cco.add_connection((decoder, key),(execute_buffer, key))
-
-for key in ["read_data1","read_data2"]:
-    cco.add_connection((registerFile, key),(execute_buffer, key))
-
-cco.add_connection((instructionSplit,"immediate"),    (execute_buffer, "immediate"))
-cco.add_connection((instructionSplit,"reg_write_sel"),(execute_buffer,"reg_write_sel"))
-
-cco.add_connection((execute_buffer_reset, "out"), (execute_buffer, "reset"))
-
-cco.add_connection((execute_buffer, "ALU_op"), (alu, "operation"))
-cco.add_connection((execute_buffer, "read_data1"), (alu, "operand_a"))
-
-cco.add_connection((execute_buffer,"read_data2"), (alu_source_mux, "input_0"))
-cco.add_connection((execute_buffer,"immediate"),  (alu_source_mux, "input_1"))
-cco.add_connection((execute_buffer,"ALU_source"), (alu_source_mux, "control"))
-cco.add_connection((execute_buffer,"immediate"), (branch_addr_mux, "input_0"))
-cco.add_connection((execute_buffer,"read_data1"), (branch_addr_mux, "input_1"))
-cco.add_connection((execute_buffer,"branch_addr_or_reg"), (branch_addr_mux, "control"))
-cco.add_connection((execute_buffer,"is_branch"), (do_branch, "input_1"))
-cco.add_connection((execute_buffer,"MEM_write"),(mem_buffer,"mem_write"))
-cco.add_connection((execute_buffer,"MEM_read"),(mem_buffer,"mem_read"))
-cco.add_connection((execute_buffer,"WB_enable"),(mem_buffer,"wb_enable"))
-cco.add_connection((execute_buffer,"read_data2"),(mem_buffer,"write_data"))
-cco.add_connection((execute_buffer,"reg_write_sel"),(mem_buffer,"reg_write_sel"))
-cco.add_connection((execute_buffer,"WB_EXEC_or_MEM"),(mem_buffer, "wb_exec_or_mem"))
+        p.add_connection(("execute_buffer","read_data2"), ("alu_source_mux", "input_0"))
+        p.add_connection(("execute_buffer","immediate"),  ("alu_source_mux", "input_1"))
+        p.add_connection(("execute_buffer","alu_source"), ("alu_source_mux", "control"))
+        p.add_connection(("execute_buffer","immediate"), ("branch_addr_mux", "input_0"))
+        p.add_connection(("execute_buffer","read_data1"), ("branch_addr_mux", "input_1"))
+        p.add_connection(("execute_buffer","branch_imm_or_reg"), ("branch_addr_mux", "control"))
+        p.add_connection(("execute_buffer","is_branch"), ("do_branch", "input_1"))
+        p.add_connection(("execute_buffer","mem_write"),("mem_buffer","mem_write"))
+        p.add_connection(("execute_buffer","mem_read"),("mem_buffer","mem_read"))
+        p.add_connection(("execute_buffer","wb_enable"),("mem_buffer","wb_enable"))
+        p.add_connection(("execute_buffer","read_data2"),("mem_buffer","write_data"))
+        p.add_connection(("execute_buffer","reg_write_sel"),("mem_buffer","reg_write_sel"))
+        p.add_connection(("execute_buffer","wb_exec_or_mem"),("mem_buffer", "wb_exec_or_mem"))
 
 
-cco.add_connection((alu_source_mux, "out"), (alu, "operand_b"))
-cco.add_connection((alu, "out"), (do_branch, "input_0"))
-cco.add_connection((alu,"out"),(mem_buffer,"alu_result"))
+        p.add_connection(("alu_source_mux", "out"), ("alu", "operand_b"))
+        p.add_connection(("alu", "out"), ("do_branch", "input_0"))
+        p.add_connection(("alu","out"),("mem_buffer","alu_result"))
 
-cco.add_connection((mem_buffer_reset, "out"), (mem_buffer, "reset"))
+        p.add_connection(("mem_buffer_reset", "out"), ("mem_buffer", "reset"))
 
-cco.add_connection((mem_buffer,"reg_write_sel"),(wb_buffer,"write_back_sel"))
-cco.add_connection((mem_buffer,"alu_result"),(data_memory,"address"))
-cco.add_connection((mem_buffer,"write_data"),(data_memory,"write_data"))
-cco.add_connection((mem_buffer,"mem_read"),(data_memory,"read"))
-cco.add_connection((mem_buffer,"mem_write"),(data_memory,"write"))
-cco.add_connection((mem_buffer,"alu_result"),(wb_buffer,"alu_result"))
-cco.add_connection((mem_buffer, "wb_exec_or_mem"),(wb_buffer, "wb_exec_or_mem"))
-cco.add_connection((mem_buffer, "wb_enable"),(wb_buffer, "wb_enable"))
+        p.add_connection(("mem_buffer","reg_write_sel"),("wb_buffer","reg_write_sel"))
+        p.add_connection(("mem_buffer","alu_result"),("data_memory","address"))
+        p.add_connection(("mem_buffer","write_data"),("data_memory","write_data"))
+        p.add_connection(("mem_buffer","mem_read"),("data_memory","read"))
+        p.add_connection(("mem_buffer","mem_write"),("data_memory","write"))
+        p.add_connection(("mem_buffer","alu_result"),("wb_buffer","alu_result"))
+        p.add_connection(("mem_buffer", "wb_exec_or_mem"),("wb_buffer", "wb_exec_or_mem"))
+        p.add_connection(("mem_buffer", "wb_enable"),("wb_buffer", "wb_enable"))
 
-cco.add_connection((wb_buffer_reset, "out"), (wb_buffer, "reset"))
+        p.add_connection(("wb_buffer_reset", "out"), ("wb_buffer", "reset"))
 
-cco.add_connection((data_memory,"read_data"),(wb_buffer,"mem_read_data"))
-cco.add_connection((wb_buffer,"write_back_sel"),(registerFile,"write_sel"))
-cco.add_connection((wb_buffer,"alu_result"),(wb_value_mux,"input_0"))
-cco.add_connection((wb_buffer,"mem_read_data"),(wb_value_mux,"input_1"))
-cco.add_connection((wb_buffer,"wb_exec_or_mem"),(wb_value_mux,"control"))
-cco.add_connection((wb_buffer, "wb_enable"),(registerFile, "write_enable"))
+        p.add_connection(("data_memory","read_data"),("wb_buffer","mem_read_data"))
+        p.add_connection(("wb_buffer","reg_write_sel"),("register_file","write_sel"))
+        p.add_connection(("wb_buffer","alu_result"),("wb_value_mux","input_0"))
+        p.add_connection(("wb_buffer","mem_read_data"),("wb_value_mux","input_1"))
+        p.add_connection(("wb_buffer","wb_exec_or_mem"),("wb_value_mux","control"))
+        p.add_connection(("wb_buffer", "wb_enable"),("register_file", "write_enable"))
 
-cco.add_connection((wb_value_mux,"out"),(registerFile,"write_data"))
+        p.add_connection(("wb_value_mux","out"),("register_file","write_data"))
 
-cco.add_connection((freeze_pipeline,"out"),(PC,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(decode_buffer,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(execute_buffer, "freeze"))
-cco.add_connection((freeze_pipeline,"out"),(mem_buffer,"freeze"))
-cco.add_connection((freeze_pipeline,"out"),(wb_buffer,"freeze"))
-cco.propagate(True)
+        p.add_connection(("freeze_pipeline","out"),("pc","freeze"))
+        p.add_connection(("freeze_pipeline","out"),("decode_buffer","freeze"))
+        p.add_connection(("freeze_pipeline","out"),("execute_buffer", "freeze"))
+        p.add_connection(("freeze_pipeline","out"),("mem_buffer","freeze"))
+        p.add_connection(("freeze_pipeline","out"),("wb_buffer","freeze"))
 
-cco.generate_nomnoml()
+        p.propagate(True)
