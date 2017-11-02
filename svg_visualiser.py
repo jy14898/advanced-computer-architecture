@@ -164,13 +164,13 @@ def visualise(proc):
         svg += template_map[type(component).__name__](component, *properties)
         svg += "</g>"
 
-    x = 0
-    for (out_component, out_key),(in_component, in_key) in proc.connections:
-        d = "M0 {} l20 0".format(x)
-        svg += '<path d="{}" class="connection" data-from="[{},{}]" data-to="[{},{}]" />'.format(d, proc.get_name(out_component), out_key, proc.get_name(in_component), in_key)
-        svg += '<text x="-5" y="{}" text-anchor="end">{}[{}]</text>'.format(x, proc.get_name(out_component), out_key)
-        svg += '<text x="25" y="{}">{}[{}]</text>'.format(x, proc.get_name(in_component), in_key)
-        x += 20
+    # x = 0
+    # for (out_component, out_key),(in_component, in_key) in proc.connections:
+    #     d = "M0 {} l20 0".format(x)
+    #     svg += '<path d="{}" class="connection" data-from="[{},{}]" data-to="[{},{}]" />'.format(d, proc.get_name(out_component), out_key, proc.get_name(in_component), in_key)
+    #     svg += '<text x="-5" y="{}" text-anchor="end">{}[{}]</text>'.format(x, proc.get_name(out_component), out_key)
+    #     svg += '<text x="25" y="{}">{}[{}]</text>'.format(x, proc.get_name(in_component), in_key)
+    #     x += 20
 
     svg += "</g>"
     svg += "</svg>"

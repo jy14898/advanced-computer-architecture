@@ -3,40 +3,53 @@ import json
 
 from collections import OrderedDict
 
+'''
+Goals...?
+
+Program input on webpage (or at least choice of which)
+need to display input state output for all components on screen
+
+ok
+
+Move to D3
+
+Use D3 drag
+Every component can have 'show' or 'debug' enabled which shows all its in, state and out (dependning on name or type, different vis)
+move component gen to client? dont really need to generate in python as i can work everything out now i think
+
+change to yahoo pure
+'''
+
+
+
 # -a note someone made here:http://slideplayer.com/slide/9255919/
 # -https://www.cise.ufl.edu/~mssz/CompOrg/Figure5.6-PipelineControlLines.gif
 
 class Component(object):
     def __init__(self):
-        self.input_keys  = []
-        self.output_keys = []
+        self.config = {
+            "input_keys": [],
+            "output_keys": [],
+            "clocked": False
+        }
 
-        self.output_values = {}
+        self.state = {}
 
-        self.clocked = False
-
-    '''
-    dont actually use this yet
-    '''
-    def get_state(self):
-        return {}
-
-    def update_values(self, input_values):
-        raise NotImplementedError('Components must override update_values()!')
+    def get_output_values(self, input_values):
+        raise NotImplementedError('Components must override get_output_values()!')
 
     def update_state(self, input_values):
-        assert self.clocked == True
+        assert self.config["clocked"] == True
         raise NotImplementedError('Components must override update_state()!')
 
     def add_input(self, key):
-        self.input_keys.append(key)
+        self.config["input_keys"].append(key)
 
     def add_output(self, key):
-        self.output_keys.append(key)
-        self.output_values[key] = None # before update
+        self.config["output_keys"].append(key)
 
     def enable_clock(self):
-        self.clocked = True
+        self.config["clocked"] = True
 
 class ComponentConnectionOrchestrator(object):
     def __init__(self):
@@ -44,6 +57,10 @@ class ComponentConnectionOrchestrator(object):
         self.connections = [
             # ((out_component, out_key), (in_component, in_key))
         ]
+
+        self.output_value_cache = {
+            # (out_component, out_key) : value
+        }
 
         self.clock_phase = 0
 
@@ -53,24 +70,27 @@ class ComponentConnectionOrchestrator(object):
 
         self.components.append(component)
 
+        for out_key in component.config["output_keys"]:
+            self.output_value_cache[(component, out_key)] = None
+
     def add_connection(self, (out_component, out_key), (in_component, in_key)):
         assert ((out_component, out_key), (in_component, in_key)) not in self.connections
         assert in_component in self.components
         assert out_component in self.components
-        assert out_key in out_component.output_keys, "{} {}".format(out_key, out_component)
-        assert in_key in in_component.input_keys
+        assert out_key in out_component.config["output_keys"], "{} {}".format(out_key, out_component)
+        assert in_key in in_component.config["input_keys"]
 
         self.connections.append(((out_component, out_key), (in_component, in_key)))
 
     def clock(self):
         self.clock_phase = 1 - self.clock_phase
 
-        for component in (c for c in self.components if c.clocked):
+        for component in (c for c in self.components if c.config["clocked"]):
             incoming_connections = list(((a,b),(d)) for ((a,b),(c,d)) in self.connections if c == component)
 
             input_values = {}
             for ((out_component,out_key),in_key) in incoming_connections:
-                input_values[in_key] = out_component.output_values[out_key]
+                input_values[in_key] = self.output_value_cache[(out_component,out_key)]
 
             input_values["clock"] = self.clock_phase
             component.update_state(input_values)
@@ -85,30 +105,31 @@ class ComponentConnectionOrchestrator(object):
 
                 input_values = {}
                 for ((out_component,out_key),in_key) in incoming_connections:
-                    input_values[in_key] = out_component.output_values[out_key]
+                    input_values[in_key] = self.output_value_cache[(out_component,out_key)]
 
                 input_values["clock"] = self.clock_phase
                 try:
-                    output_values = component.update_values(input_values)
+                    output_values = component.get_output_values(input_values)
                 except (KeyboardInterrupt, SystemExit):
                     raise
-                except:
+                except Exception as e:
                     if setup:
                         changed = True
+                        # print e
                         continue
                     else:
                         raise
 
-                for out_key in component.output_keys:
+                for out_key in component.config["output_keys"]:
                     assert out_key in output_values, "{} output missing key {}".format(component, out_key)
                     assert output_values[out_key] is not None, "{} {}".format(component, out_key)
 
-                    if output_values[out_key] != component.output_values[out_key]:
+                    if output_values[out_key] != self.output_value_cache[(component,out_key)]:
                         changed = True
 
-                    component.output_values[out_key] = output_values[out_key]
+                    self.output_value_cache[(component,out_key)] = output_values[out_key]
 
-                assert len(component.output_keys) == len(output_values)
+                assert len(component.config["output_keys"]) == len(output_values)
         return
 
     def step(self):
@@ -134,22 +155,17 @@ class Latch(Component):
 
         self.enable_clock()
 
-        self.value = value
-        self.clock_phase = clock_phase
+        self.state["value"] = value
+        self.config["clock_phase"] = clock_phase
 
-    def get_state(self):
+    def get_output_values(self, input_values):
         return {
-            "value": self.value
-        }
-
-    def update_values(self, input_values):
-        return {
-            "out": self.value
+            "out": self.state["value"]
         }
 
     def update_state(self, input_values):
-        if input_values["clock"] == self.clock_phase and input_values["freeze"] == 0:
-            self.value = input_values["in"]
+        if input_values["clock"] == self.config["clock_phase"] and input_values["freeze"] == 0:
+            self.state["value"] = input_values["in"]
 
 class LatchWithReset(Latch):
     def __init__(self, value, clock_phase):
@@ -157,23 +173,22 @@ class LatchWithReset(Latch):
 
         self.add_input("reset")
 
-        # print self.value
-        self.reset_value = value
+        self.config["reset_value"] = value
 
     def update_state(self, input_values):
-        if input_values["clock"] == self.clock_phase:
+        if input_values["clock"] == self.config["clock_phase"]:
             if input_values["reset"] == 0:
-                self.value = input_values["in"]
+                self.state["value"] = input_values["in"]
 
         # reset on any phase... not sure if this is good or bad
         if input_values["reset"] == 1:
-            self.value = self.reset_value
+            self.state["value"] = self.config["reset_value"]
 
 class PipelineBuffer(Component):
     def __init__(self):
         super(PipelineBuffer, self).__init__()
 
-        self.names = OrderedDict()
+        self.config["names"] = OrderedDict()
 
         self.add_input("reset")
         self.add_input("freeze")
@@ -186,23 +201,23 @@ class PipelineBuffer(Component):
         self.add_input(name)
         self.add_output(name)
 
-        self.names[name] = {
-            "value": value,
+        self.config["names"][name] = {
             "default": value
         }
 
-    def update_values(self, input_values):
-        return dict((k, v["value"]) for k, v in self.names.iteritems())
+        self.state[name] = value
 
+    def get_output_values(self, input_values):
+        return self.state
 
     def update_state(self, input_values):
         if input_values["clock"] == 0 and input_values["freeze"] == 0:
-            for name in self.names.keys():
-                self.names[name]["value"] = input_values[name]
+            for name in self.config["names"].keys():
+                self.state[name] = input_values[name]
 
         if input_values["reset"] == 1:
-            for name in self.names.keys():
-                self.names[name]["value"] = self.names[name]["default"]
+            for name in self.config["names"].keys():
+                self.state[name] = self.config["names"][name]["default"]
 
 
 class Incrementer(Component):
@@ -212,7 +227,7 @@ class Incrementer(Component):
         self.add_input("in")
         self.add_output("out")
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         return {
             "out": input_values["in"] + 1
         }
@@ -222,11 +237,11 @@ class Constant(Component):
         super(Constant, self).__init__()
 
         self.add_output("out")
-        self.value = value
+        self.config["value"] = value
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         return {
-            "out": self.value
+            "out": self.config["value"]
         }
 
 class And(Component):
@@ -238,9 +253,9 @@ class And(Component):
 
         self.add_output("out")
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         return {
-            "out": 1 if all(input_values[k] for k in self.input_keys) else 0
+            "out": 1 if all(input_values[k] for k in self.config["input_keys"]) else 0
         }
 
 class Or(Component):
@@ -252,9 +267,9 @@ class Or(Component):
 
         self.add_output("out")
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         return {
-            "out": 1 if any(input_values[k] for k in self.input_keys) else 0
+            "out": 1 if any(input_values[k] for k in self.config["input_keys"]) else 0
         }
 
 class Multiplexer(Component):
@@ -267,7 +282,7 @@ class Multiplexer(Component):
         self.add_input("control")
         self.add_output("out")
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         return {
             "out": input_values["input_{}".format(input_values["control"])]
         }
@@ -284,37 +299,31 @@ class DataMemory(Component):
         self.add_output("read_data")
         self.enable_clock()
 
-        self.memory = {}
+        self.state["memory"] = {}
 
         for key, value in enumerate(memory):
-            self.memory[key] = value
+            self.state["memory"][key] = value
 
-        self.read_data = 0
-        self.clock_phase = clock_phase
+        self.state["read_data"] = 0
+        self.config["clock_phase"] = clock_phase
 
-    def get_state(self):
+    def get_output_values(self, input_values):
         return {
-            "read_data": self.read_data,
-            "memory": self.memory
-        }
-
-    def update_values(self, input_values):
-        return {
-            "read_data": self.read_data
+            "read_data": self.state["read_data"]
         }
 
     def update_state(self, input_values):
-        if input_values["clock"] == self.clock_phase:
+        if input_values["clock"] == self.config["clock_phase"]:
             assert not (input_values["read"] == 1 and input_values["write"] == 1)
 
             if input_values["read"] == 1:
-                if input_values["address"] in self.memory:
-                    self.read_data = self.memory[input_values["address"]]
+                if input_values["address"] in self.state["memory"]:
+                    self.state["read_data"] = self.state["memory"][input_values["address"]]
                 else:
-                    self.read_data = 0
+                    self.state["read_data"] = 0
 
             if input_values["write"] == 1:
-                self.memory[input_values["address"]] = input_values["write_data"]
+                self.state["memory"][input_values["address"]] = input_values["write_data"]
 
 class InstructionMemory(Component):
     def __init__(self, instructions, clock_phase):
@@ -325,23 +334,18 @@ class InstructionMemory(Component):
         self.add_output("instruction")
         self.enable_clock()
 
-        self.instructions = instructions
-        self.instruction = ("NOOP",0,0,0,0)
-        self.clock_phase = clock_phase
+        self.config["instructions"] = instructions
+        self.state["instruction"] = ("NOOP",0,0,0,0)
+        self.config["clock_phase"] = clock_phase
 
-    def get_state(self):
+    def get_output_values(self, input_values):
         return {
-            "instruction": self.instruction,
-        }
-
-    def update_values(self, input_values):
-        return {
-            "instruction": self.instruction
+            "instruction": self.state["instruction"]
         }
 
     def update_state(self, input_values):
-        if input_values["clock"] == self.clock_phase:
-            self.instruction = self.instructions[input_values["address"]]
+        if input_values["clock"] == self.config["clock_phase"]:
+            self.state["instruction"] = self.config["instructions"][input_values["address"]]
 
 class InstructionSplit(Component):
     instruction_keys = ["opcode","reg_read_sel1", "reg_read_sel2", "reg_write_sel", "immediate"]
@@ -354,14 +358,14 @@ class InstructionSplit(Component):
         for key in InstructionSplit.instruction_keys:
             self.add_output(key)
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         return dict(zip(InstructionSplit.instruction_keys,input_values["instruction"]))
 
 class RegisterFile(Component):
     def __init__(self, num_registers, clock_phase):
         super(RegisterFile, self).__init__()
 
-        self.registers = list(0 for i in xrange(num_registers))
+        self.state["registers"] = list(0 for i in xrange(num_registers))
 
         self.add_input("reg_read_sel1")
         self.add_input("reg_read_sel2")
@@ -375,27 +379,27 @@ class RegisterFile(Component):
 
         self.enable_clock()
 
-        self.clock_phase = clock_phase
+        self.config["clock_phase"] = clock_phase
 
     def get_state(self):
-        return {
-            "registers": self.registers,
-        }
+        state = super(RegisterFile, self).get_state()
+        state["registers"] = self.state["registers"]
+        return state
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         # i think we are supposed to store which register to read from in ph0
         return {
-            "read_data1": self.registers[input_values["reg_read_sel1"]],
-            "read_data2": self.registers[input_values["reg_read_sel2"]]
+            "read_data1": self.state["registers"][input_values["reg_read_sel1"]],
+            "read_data2": self.state["registers"][input_values["reg_read_sel2"]]
         }
 
     def update_state(self, input_values):
-        if input_values["clock"] == self.clock_phase:
+        if input_values["clock"] == self.config["clock_phase"]:
             if input_values["write_enable"] == 1:
                 # disallow writing to R0
                 assert input_values["write_sel"] != 0, "Cannot change R0's value"
 
-                self.registers[input_values["write_sel"]] = input_values["write_data"]
+                self.state["registers"][input_values["write_sel"]] = input_values["write_data"]
 
 class ALU(Component):
     def __init__(self):
@@ -412,6 +416,11 @@ class ALU(Component):
         self.cycles_left = 0
 
         self.enable_clock()
+
+    def get_state(self):
+        state = super(ALU, self).get_state()
+        state["cycles_left"] = self.cycles_left
+        return state
 
     operations = {
         "ADD": lambda ins: ins[0] + ins[1],
@@ -451,7 +460,7 @@ class ALU(Component):
     def compute(inputs, operation):
         return ALU.operations[operation](inputs)
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         return {
             "busy": 1 if self.cycles_left > 0 else 0,
             "out": 0 if self.cycles_left > 0 else ALU.compute((input_values["operand_a"], input_values["operand_b"]), input_values["operation"])
@@ -497,7 +506,7 @@ class Decoder(Component):
         self.add_output("mem_write")
         self.add_output("mem_read")
 
-    def update_values(self, input_values):
+    def get_output_values(self, input_values):
         opcode = input_values["opcode"]
 
         output_values = {
@@ -568,9 +577,12 @@ class Processor(ComponentConnectionOrchestrator):
         return self.name_lookup[component]
 
     def __setitem__(self, key, value):
-        self.add_component(value)
         self.object_lookup[key] = value
         self.name_lookup[value] = key
+
+    def components_setup_complete(self):
+        for name, component in self.object_lookup.iteritems():
+            self.add_component(component)
 
     def add_connection(self, (out_name, out_key), (in_name, in_key)):
         out_component = self[out_name]
@@ -639,6 +651,8 @@ class Processor(ComponentConnectionOrchestrator):
         p["wb_value_mux"] = Multiplexer(2)
 
         p["freeze_pipeline"] = Or(1)
+
+        self.components_setup_complete()
 
         ############################# CONNECTIONS #############################
 
