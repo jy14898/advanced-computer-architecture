@@ -6,18 +6,20 @@ from collections import OrderedDict
 '''
 Goals...?
 
+home page is a Program() generator. Creates an ID which then redirects to the processor execution vis
 Program input on webpage (or at least choice of which)
-need to display input state output for all components on screen
-
-ok
-
-Move to D3
-
-Use D3 drag
-Every component can have 'show' or 'debug' enabled which shows all its in, state and out (dependning on name or type, different vis)
-move component gen to client? dont really need to generate in python as i can work everything out now i think
 
 change to yahoo pure
+
+add bypassing of operand results -> for now i can just tell it actually no its a thing yeah. have a tmux between register file and pipeline stage. decode stage will remember last instruction and detect if operands are dependent and switch the tmux
+
+this means i need to move the WB stage to an earlier point, otherwise there might be a gap of dependency where it isnt available from exec and it isnt written back yet? or just stall
+also need to deal with case where division might restart -> every stage says whetehr or not outputs actually changed
+
+1. changed thing? means i'll need to add inputs to things like ALU... do i call it enable? or go or start or execute
+2. hazard detect and stall vs NOOPs - simple way to do it for now is to tell everything whether or not to use the result of the prev instr. how does this work with 2 instructions both of which are deps?
+3. write more test progams
+4. reservation station doesnt sound too hard to do first actually
 '''
 
 
@@ -328,7 +330,6 @@ class DataMemory(Component):
 class InstructionMemory(Component):
     def __init__(self, instructions, clock_phase):
         super(InstructionMemory, self).__init__()
-
 
         self.add_input("address")
         self.add_output("instruction")

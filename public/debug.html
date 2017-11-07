@@ -108,11 +108,6 @@
 
           // give it its own datum, therefore it knows when its been created or not
           function basic_render(d) {
-            // d3.select(this)
-            //   select('.basic-render')
-            //   .datum(d.some_property)
-            //   .enter()
-
 
             if (50 > d.size.height) {
               d.size.height = 50
@@ -133,7 +128,7 @@
               .enter()
                 .append('foreignObject')
                 .classed('register-file-render', true)
-                .attr('width', 100)
+                .attr('width', 120)
                 .attr('height', 200)
                 .call(function(foreignObject){
                   foreignObject
@@ -143,6 +138,7 @@
                     .attr('style', 'font-size: 10px; overflow: auto; height: 100%;')
                     .append('xhtml:table')
                 })
+
               .merge(fo)
                 .select('html')
                 .select('body')
@@ -150,7 +146,16 @@
                 .call(function(body){
                   var registers = body
                     .selectAll('.register')
-                    .data(function(d) { return d.state.state.registers; })
+                    .data(function(d) {
+                      return d.state.registers.map(function(r,i){
+                        return {
+                          'value': r,
+                          'reg_read_sel1': d.state.input_values.reg_read_sel1 == i,
+                          'reg_read_sel2': d.state.input_values.reg_read_sel2 == i,
+                          'write_sel': d.state.input_values.write_sel == i && d.state.input_values.write_enable
+                        }
+                      });
+                    })
 
                   registers
                     .enter()
@@ -160,18 +165,114 @@
                         row
                           .append('td')
                           .text(function(d,i){ return i })
+
+                        row
+                          .append('td')
+                          .classed('register-value', true)
+
+                        row
+                          .append('td')
+                          .classed('register-status', true)
                       })
-                      .append('td')
-                      .classed('register-value', true)
                     .merge(registers)
-                      .select('td.register-value')
-                      .text(function(d){ return d })
+                      .call(function(selection){
+                        selection
+                          .select('td.register-value')
+                          .text(function(d){ return d.value })
+                      })
+                      .call(function(selection){
+                        selection
+                        .select('td.register-status')
+                        .text(function(d){
+                          let ary = [];
+                          if (d.reg_read_sel1) ary.push('rs0');
+                          if (d.reg_read_sel2) ary.push('rs1');
+                          if (d.write_sel)     ary.push('ws');
+                          return ary.join(',')
+                        })
+
+                      })
+                      ;
                 })
-              //   .
 
 
-            if (100 > d.size.width)  d.size.width  = 100
+            if (120 > d.size.width)  d.size.width  = 120
             if (200 > d.size.height) d.size.height = 200
+          }
+
+          function instruction_memory_render(d) {
+            var fo = d3.select(this)
+              .selectAll('.instruction-memory-render')
+              .data([d])
+              ;
+
+            fo
+              .enter()
+                .append('foreignObject')
+                .classed('instruction-memory-render', true)
+                .attr('width', 120)
+                .attr('height', 200)
+                .call(function(foreignObject){
+                  foreignObject
+                    .append('xhtml:html')
+                    .attr('xmlns', "http://www.w3.org/1999/xhtml")
+                    .append('xhtml:body')
+                    .attr('style', 'font-size: 10px; overflow: auto; height: 100%; font-family: monospace;')
+                    .append('xhtml:table')
+                    .attr('style', 'width: 100%; border-collapse: collapse;')
+                })
+
+              .merge(fo)
+                .select('html')
+                .select('body')
+                .select('table')
+                .call(function(body){
+                  var entries = body
+                    .selectAll('.instruction-memory-entry')
+                    .data(function(d) {
+                      return [0,1,2,3].map(function(i){
+                        let idx = d.state.input_values.address + i
+
+                        return {
+                          "index": idx,
+                          "value": d.structure.instructions[idx],
+                          "current": i == 0
+                        }
+                      })
+                    })
+
+                  entries
+                    .enter()
+                      .append('xhtml:tr')
+                      .attr('style', function(d){ return d.current ? 'border-bottom: 1px solid #8d8d8d;' : ''; })
+                      .classed('instruction-memory-entry', true)
+                      .call(function(row){
+                        row
+                          .append('td')
+                          .classed('instruction-memory-entry-index', true)
+
+                        row
+                          .append('td')
+                          .classed('instruction-memory-entry-value', true)
+
+                      })
+                    .merge(entries)
+                      .call(function(selection){
+                        selection
+                          .select('td.instruction-memory-entry-index')
+                          .text(function(d){ return d.index })
+                      })
+                      .call(function(selection){
+                        selection
+                          .select('td.instruction-memory-entry-value')
+                          .text(function(d){ return d.value })
+                      })
+                      ;
+                })
+
+
+            if (120 > d.size.width)  d.size.width  = 120
+            if (70 > d.size.height) d.size.height = 70
           }
 
           var component_render_map = {
@@ -181,7 +282,7 @@
             "RegisterFile": register_file_render,
             "InstructionSplit": basic_render,
             "And": basic_render,
-            "InstructionMemory": basic_render,
+            "InstructionMemory": instruction_memory_render,
             "PipelineBuffer": basic_render,
             "Latch": basic_render,
             "Constant": basic_render,

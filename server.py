@@ -1,4 +1,8 @@
+#!/usr/bin/env python2
 # ~/firefox-lab/firefox -p "Firefox Lab" -no-remote "http://localhost:8080/"
+import sys
+
+sys.dont_write_bytecode = True
 
 import os
 import cherrypy
@@ -44,10 +48,9 @@ class ProcessorStructureAPI(object):
         for name, component in processor.object_lookup.iteritems():
             structure["components"][name] = {
                 "type": type(component).__name__,
-                "input_keys": component.config["input_keys"],
-                "output_keys": component.config["output_keys"],
-
             }
+
+            structure["components"][name].update(component.config)
 
         for (out_component, out_key),(in_component, in_key) in processor.connections:
             structure["connections"].append({
@@ -71,12 +74,12 @@ class ProcessorAPI(object):
 
         with processor_lock:
             for name, component in processor.object_lookup.iteritems():
-                state["components"][name] = {
-                    "state": component.state,
-                }
+                state["components"][name] = {}
 
                 state["components"][name]["input_values"]  = dict( (d, processor.output_value_cache[(a,b)]) for ((a,b),(c,d)) in processor.connections if c == component)
                 state["components"][name]["output_values"] = dict((out_key,processor.output_value_cache[(component, out_key)]) for out_key in component.config["output_keys"])
+
+                state["components"][name].update(component.state)
 
         state["phase"] = processor.clock_phase
 
