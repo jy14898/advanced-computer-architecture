@@ -11,6 +11,7 @@ from assembly import *
 program = {
     "instructions": assemble([
         XOR("R1","R1","R1"), # R1 = R1 xor R1 = 0
+        BEQ(0,"R0","R0"),
         NOOP(),
         NOOP(),
         NOOP(),

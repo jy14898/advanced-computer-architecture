@@ -1,5 +1,6 @@
 import functools
 import json
+import traceback
 
 from collections import OrderedDict
 
@@ -8,8 +9,6 @@ Goals...?
 
 home page is a Program() generator. Creates an ID which then redirects to the processor execution vis
 Program input on webpage (or at least choice of which)
-
-change to yahoo pure
 
 add bypassing of operand results -> for now i can just tell it actually no its a thing yeah. have a tmux between register file and pipeline stage. decode stage will remember last instruction and detect if operands are dependent and switch the tmux
 
@@ -23,11 +22,27 @@ also need to deal with case where division might restart -> every stage says whe
 '''
 
 
+'''
+Group input and outputs into bundles or something, and then map a bundle to a bus
+maybe?
+
+
+NEED TO DECIDE WHETHER TO LEAVE AS IS AND THEN SLAP A 'BUS CONVERTER' THING ON THE SIDE
+
+or have them directly work with bus
+
+maybe both
+'''
+
+
 
 # -a note someone made here:http://slideplayer.com/slide/9255919/
 # -https://www.cise.ufl.edu/~mssz/CompOrg/Figure5.6-PipelineControlLines.gif
 
 class Component(object):
+    '''
+    TODO: Add some sort of grouping thing for display of keys
+    '''
     def __init__(self):
         self.config = {
             "input_keys": [],
@@ -52,6 +67,21 @@ class Component(object):
 
     def enable_clock(self):
         self.config["clocked"] = True
+
+class Bus(Component):
+    def __init__(self):
+        self.bus_input_counter = 0
+
+    def add_bus_input(self):
+        key = str(self.bus_input_counter)
+        self.add_input(key)
+        self.bus_input_counter += 1
+        return key
+
+    def get_output_values(self, input_values):
+        return {
+            "out": dict(itertools.chain.from_iterable(iv.iteritems() for iv in input_values.itervalues()))
+        }
 
 class ComponentConnectionOrchestrator(object):
     def __init__(self):
@@ -117,7 +147,7 @@ class ComponentConnectionOrchestrator(object):
                 except Exception as e:
                     if setup:
                         changed = True
-                        # print e
+                        # traceback.print_exc()
                         continue
                     else:
                         raise
@@ -186,42 +216,6 @@ class LatchWithReset(Latch):
         if input_values["reset"] == 1:
             self.state["value"] = self.config["reset_value"]
 
-class PipelineBuffer(Component):
-    def __init__(self):
-        super(PipelineBuffer, self).__init__()
-
-        self.config["names"] = OrderedDict()
-
-        self.add_input("reset")
-        self.add_input("freeze")
-
-        self.enable_clock()
-
-    def add_name(self, name, value):
-        assert name not in ["reset","freeze"]
-
-        self.add_input(name)
-        self.add_output(name)
-
-        self.config["names"][name] = {
-            "default": value
-        }
-
-        self.state[name] = value
-
-    def get_output_values(self, input_values):
-        return self.state
-
-    def update_state(self, input_values):
-        if input_values["clock"] == 0 and input_values["freeze"] == 0:
-            for name in self.config["names"].keys():
-                self.state[name] = input_values[name]
-
-        if input_values["reset"] == 1:
-            for name in self.config["names"].keys():
-                self.state[name] = self.config["names"][name]["default"]
-
-
 class Incrementer(Component):
     def __init__(self):
         super(Incrementer, self).__init__()
@@ -233,6 +227,7 @@ class Incrementer(Component):
         return {
             "out": input_values["in"] + 1
         }
+
 
 class Constant(Component):
     def __init__(self, value):
@@ -289,6 +284,42 @@ class Multiplexer(Component):
             "out": input_values["input_{}".format(input_values["control"])]
         }
 
+
+class PipelineBuffer(Component):
+    def __init__(self):
+        super(PipelineBuffer, self).__init__()
+
+        self.config["names"] = OrderedDict()
+
+        self.add_input("reset")
+        self.add_input("freeze")
+
+        self.enable_clock()
+
+    def add_name(self, name, value):
+        assert name not in ["reset","freeze"]
+
+        self.add_input(name)
+        self.add_output(name)
+
+        self.config["names"][name] = {
+            "default": value
+        }
+
+        self.state[name] = value
+
+    def get_output_values(self, input_values):
+        return self.state
+
+    def update_state(self, input_values):
+        if input_values["clock"] == 0 and input_values["freeze"] == 0:
+            for name in self.config["names"].keys():
+                self.state[name] = input_values[name]
+
+        if input_values["reset"] == 1:
+            for name in self.config["names"].keys():
+                self.state[name] = self.config["names"][name]["default"]
+
 class DataMemory(Component):
     def __init__(self, memory, clock_phase):
         super(DataMemory, self).__init__()
@@ -327,60 +358,67 @@ class DataMemory(Component):
             if input_values["write"] == 1:
                 self.state["memory"][input_values["address"]] = input_values["write_data"]
 
-class InstructionMemory(Component):
-    def __init__(self, instructions, clock_phase):
-        super(InstructionMemory, self).__init__()
 
-        self.add_input("address")
+'''
+inputs
+    set pc: (true, value)/(false, 0000)
+
+outputs
+    current PC
+    current instruction
+'''
+class InstructionFetch(Component):
+    def __init__(self, instructions):
+        super(InstructionFetch, self).__init__()
+
+        self.add_input("set_pc")
+        self.add_input("freeze")
+        self.add_output("pc")
         self.add_output("instruction")
+
         self.enable_clock()
 
         self.config["instructions"] = instructions
+
         self.state["instruction"] = ("NOOP",0,0,0,0)
-        self.config["clock_phase"] = clock_phase
+        self.state["pc"]          = 0
 
     def get_output_values(self, input_values):
         return {
-            "instruction": self.state["instruction"]
+            "instruction": self.state["instruction"],
+            "pc": self.state["pc"]
         }
 
     def update_state(self, input_values):
-        if input_values["clock"] == self.config["clock_phase"]:
-            self.state["instruction"] = self.config["instructions"][input_values["address"]]
+        if input_values["freeze"]:
+            return
 
-class InstructionSplit(Component):
-    instruction_keys = ["opcode","reg_read_sel1", "reg_read_sel2", "reg_write_sel", "immediate"]
+        if input_values["clock"] == 0:
+            if input_values["set_pc_en"]:
+                self.state["pc"] = input_values["set_pc_val"]
+            else:
+                self.state["pc"] = self.state["pc"] + 1
 
-    def __init__(self):
-        super(InstructionSplit, self).__init__()
-
-        self.add_input("instruction")
-
-        for key in InstructionSplit.instruction_keys:
-            self.add_output(key)
-
-    def get_output_values(self, input_values):
-        return dict(zip(InstructionSplit.instruction_keys,input_values["instruction"]))
+        if input_values["clock"] == 1:
+            self.state["instruction"] = self.config["instructions"][self.state["pc"]]
 
 class RegisterFile(Component):
-    def __init__(self, num_registers, clock_phase):
+    def __init__(self, num_registers, num_reads):
         super(RegisterFile, self).__init__()
 
         self.state["registers"] = list(0 for i in xrange(num_registers))
-
-        self.add_input("reg_read_sel1")
-        self.add_input("reg_read_sel2")
 
         self.add_input("write_sel")
         self.add_input("write_enable")
         self.add_input("write_data")
 
-        self.add_output("read_data1")
-        self.add_output("read_data2")
+        for i in xrange(num_reads):
+            self.add_input("read_sel{}".format(i))
+            self.add_output("read_data{}".format(i))
+
+        self.config["num_reads"] = num_reads
 
         self.enable_clock()
-
-        self.config["clock_phase"] = clock_phase
 
     def get_state(self):
         state = super(RegisterFile, self).get_state()
@@ -389,13 +427,10 @@ class RegisterFile(Component):
 
     def get_output_values(self, input_values):
         # i think we are supposed to store which register to read from in ph0
-        return {
-            "read_data1": self.state["registers"][input_values["reg_read_sel1"]],
-            "read_data2": self.state["registers"][input_values["reg_read_sel2"]]
-        }
+        return dict(("read_data{}".format(i), self.state["registers"][input_values["read_sel{}".format(i)]]) for i in xrange(self.config["num_reads"]))
 
     def update_state(self, input_values):
-        if input_values["clock"] == self.config["clock_phase"]:
+        if input_values["clock"] == 0:
             if input_values["write_enable"] == 1:
                 # disallow writing to R0
                 assert input_values["write_sel"] != 0, "Cannot change R0's value"
@@ -597,20 +632,17 @@ class Processor(ComponentConnectionOrchestrator):
         self.name_lookup = {}
 
         p = self
-
-        p["pc"] = Latch(0, clock_phase=0)
-        p["inc_pc"] = Incrementer()
-        p["pc_mux"] = Multiplexer(2)
-
-        p["fetcher"] = InstructionMemory(instructions, clock_phase=1)
+        p["instruction_fetch"] = InstructionFetch(instructions)
 
         p["decode_buffer"] = PipelineBuffer()
-        p["decode_buffer"].add_name("instruction", ("NOOP",0,0,0,0))
-
-        p["instruction_split"] = InstructionSplit()
+        p["decode_buffer"].add_name("instruction_opcode", "NOOP")
+        p["decode_buffer"].add_name("instruction_reg_read_sel1", 0)
+        p["decode_buffer"].add_name("instruction_reg_read_sel2", 0)
+        p["decode_buffer"].add_name("instruction_reg_write_sel", 0)
+        p["decode_buffer"].add_name("instruction_immediate",     0)
 
         p["decoder"] = Decoder()
-        p["register_file"] = RegisterFile(32, clock_phase=0)
+        p["register_file"] = RegisterFile(32, 2)
 
         p["execute_buffer_reset"] = Constant(0)
         p["execute_buffer"] = PipelineBuffer()
@@ -620,7 +652,7 @@ class Processor(ComponentConnectionOrchestrator):
         for out_key in ["alu_op", "alu_source", "wb_enable", "wb_exec_or_mem", "is_branch", "branch_imm_or_reg", "mem_write", "mem_read"]:
             p["execute_buffer"].add_name(out_key, "ADD" if out_key == "alu_op" else 0)
 
-        for out_key in ["read_data1","read_data2"]:
+        for out_key in ["read_data0","read_data1"]:
             p["execute_buffer"].add_name(out_key, 0)
 
         p["alu"] = ALU()
@@ -659,49 +691,47 @@ class Processor(ComponentConnectionOrchestrator):
 
         p.add_connection(("alu","busy"),("freeze_pipeline","input_0"))
 
-        p.add_connection(("pc_mux","out"),("pc",   "in"))
-        p.add_connection(("pc",   "out"),("inc_pc","in"))
+        p.add_connection(("branch_addr_mux","out"),("instruction_fetch","set_pc_val"))
+        p.add_connection(("do_branch",      "out"),("instruction_fetch","set_pc_en"))
 
-        p.add_connection(("inc_pc",     "out"),("pc_mux","input_0"))
-        p.add_connection(("branch_addr_mux","out"),("pc_mux","input_1"))
-        p.add_connection(("do_branch",  "out"),("pc_mux","control"))
 
-        p.add_connection(("pc",   "out"),("fetcher","address"))
+        p.add_connection(("instruction_fetch","instruction_opcode"),("decode_buffer","instruction_opcode"))
+        p.add_connection(("instruction_fetch","instruction_reg_read_sel1"),("decode_buffer","instruction_reg_read_sel1"))
+        p.add_connection(("instruction_fetch","instruction_reg_read_sel2"),("decode_buffer","instruction_reg_read_sel2"))
+        p.add_connection(("instruction_fetch","instruction_reg_write_sel"),("decode_buffer","instruction_reg_write_sel"))
+        p.add_connection(("instruction_fetch","instruction_immediate"),("decode_buffer","instruction_immediate"))
 
-        p.add_connection(("fetcher","instruction"),("decode_buffer","instruction"))
         p.add_connection(("do_branch", "out"), ("decode_buffer", "reset"))
 
-        p.add_connection(("decode_buffer", "instruction"), ("instruction_split", "instruction"))
-
-        p.add_connection(("instruction_split","opcode"),("decoder","opcode"))
-        p.add_connection(("instruction_split","reg_read_sel1"),("register_file","reg_read_sel1"))
-        p.add_connection(("instruction_split","reg_read_sel2"),("register_file","reg_read_sel2"))
+        p.add_connection(("decode_buffer","instruction_opcode"),("decoder","opcode"))
+        p.add_connection(("decode_buffer","instruction_reg_read_sel1"),("register_file","read_sel0"))
+        p.add_connection(("decode_buffer","instruction_reg_read_sel2"),("register_file","read_sel1"))
 
         for key in ["wb_enable", "wb_exec_or_mem", "alu_op", "alu_source", "is_branch", "branch_imm_or_reg", "mem_write", "mem_read"]:
             p.add_connection(("decoder", key),("execute_buffer", key))
 
-        for key in ["read_data1","read_data2"]:
+        for key in ["read_data0","read_data1"]:
             p.add_connection(("register_file", key),("execute_buffer", key))
 
-        p.add_connection(("instruction_split","immediate"),    ("execute_buffer", "immediate"))
-        p.add_connection(("instruction_split","reg_write_sel"),("execute_buffer","reg_write_sel"))
+        p.add_connection(("decode_buffer","instruction_immediate"),    ("execute_buffer", "immediate"))
+        p.add_connection(("decode_buffer","instruction_reg_write_sel"),("execute_buffer","reg_write_sel"))
 
         p.add_connection(("execute_buffer_reset", "out"), ("execute_buffer", "reset"))
 
         p.add_connection(("execute_buffer", "alu_op"), ("alu", "operation"))
-        p.add_connection(("execute_buffer", "read_data1"), ("alu", "operand_a"))
+        p.add_connection(("execute_buffer", "read_data0"), ("alu", "operand_a"))
 
-        p.add_connection(("execute_buffer","read_data2"), ("alu_source_mux", "input_0"))
+        p.add_connection(("execute_buffer","read_data1"), ("alu_source_mux", "input_0"))
         p.add_connection(("execute_buffer","immediate"),  ("alu_source_mux", "input_1"))
         p.add_connection(("execute_buffer","alu_source"), ("alu_source_mux", "control"))
         p.add_connection(("execute_buffer","immediate"), ("branch_addr_mux", "input_0"))
-        p.add_connection(("execute_buffer","read_data1"), ("branch_addr_mux", "input_1"))
+        p.add_connection(("execute_buffer","read_data0"), ("branch_addr_mux", "input_1"))
         p.add_connection(("execute_buffer","branch_imm_or_reg"), ("branch_addr_mux", "control"))
         p.add_connection(("execute_buffer","is_branch"), ("do_branch", "input_1"))
         p.add_connection(("execute_buffer","mem_write"),("mem_buffer","mem_write"))
         p.add_connection(("execute_buffer","mem_read"),("mem_buffer","mem_read"))
         p.add_connection(("execute_buffer","wb_enable"),("mem_buffer","wb_enable"))
-        p.add_connection(("execute_buffer","read_data2"),("mem_buffer","write_data"))
+        p.add_connection(("execute_buffer","read_data1"),("mem_buffer","write_data"))
         p.add_connection(("execute_buffer","reg_write_sel"),("mem_buffer","reg_write_sel"))
         p.add_connection(("execute_buffer","wb_exec_or_mem"),("mem_buffer", "wb_exec_or_mem"))
 
@@ -732,7 +762,7 @@ class Processor(ComponentConnectionOrchestrator):
 
         p.add_connection(("wb_value_mux","out"),("register_file","write_data"))
 
-        p.add_connection(("freeze_pipeline","out"),("pc","freeze"))
+        p.add_connection(("freeze_pipeline","out"),("instruction_fetch","freeze"))
         p.add_connection(("freeze_pipeline","out"),("decode_buffer","freeze"))
         p.add_connection(("freeze_pipeline","out"),("execute_buffer", "freeze"))
         p.add_connection(("freeze_pipeline","out"),("mem_buffer","freeze"))

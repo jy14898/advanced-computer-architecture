@@ -150,8 +150,8 @@
                       return d.state.registers.map(function(r,i){
                         return {
                           'value': r,
-                          'reg_read_sel1': d.state.input_values.reg_read_sel1 == i,
-                          'reg_read_sel2': d.state.input_values.reg_read_sel2 == i,
+                          'read_sel0': d.state.input_values.read_sel0 == i,
+                          'read_sel1': d.state.input_values.read_sel1 == i,
                           'write_sel': d.state.input_values.write_sel == i && d.state.input_values.write_enable
                         }
                       });
@@ -185,8 +185,8 @@
                         .select('td.register-status')
                         .text(function(d){
                           let ary = [];
-                          if (d.reg_read_sel1) ary.push('rs0');
-                          if (d.reg_read_sel2) ary.push('rs1');
+                          if (d.read_sel0) ary.push('rs0');
+                          if (d.read_sel1) ary.push('rs1');
                           if (d.write_sel)     ary.push('ws');
                           return ary.join(',')
                         })
@@ -289,6 +289,7 @@
             "Or": basic_render,
             "Decoder": basic_render,
             "ALU": basic_render,
+            "InstructionFetch": basic_render,
           };
 
           function setup_inputs(component_d) {
