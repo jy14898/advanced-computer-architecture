@@ -4,7 +4,7 @@ import traceback
 import itertools
 import copy
 
-from collections import OrderedDict
+from collections import namedtuple
 '''
 TODO
 somehow enforce that channelends are always written to during update. maybe also enforce only one write? idk
@@ -43,6 +43,25 @@ Add branch predictor with pre-decode of instruction during fetch
  BR unit can issue a jump
  https://www.google.co.uk/url?sa=i&rct=j&q=&esrc=s&source=images&cd=&ved=0ahUKEwiJy8OsrY3YAhVVFMAKHWocDaoQjRwIBw&url=http%3A%2F%2Fslideplayer.com%2Fslide%2F8969149%2F&psig=AOvVaw2T5DT1JukfNErtC3Y3HVt5&ust=1513473079353861
 
+
+
+above TODO is wrong but close?
+see my notes scattered around
+
+TODO 4
+make it so Componentupdater is less crap
+default to None if not written
+we should only diff AFTER update
+ComponentUpdater should buffer the changes, or have it a thing in channel things
+nah, ChannelEnds buffer their changes, and then we tell them all to send after update
+
+
+
+
+OK PROPER TODO
+
+Add the reorder buffer in
+    Make it so instructions dependent on another ROB entry start when that entry finishes, by doing that thing
 '''
 
 # TODO use these instead
@@ -53,9 +72,9 @@ class ChannelEnd(object):
     def __init__(self, component):
         self.component = component
         self.rx_value = None
-        self.rx_subscribers = set()
-        
-        self.tx_setter = lambda value: None
+        self.tx_value = None
+
+        self.pair = None
 
     @property
     def rx(self):
@@ -63,14 +82,11 @@ class ChannelEnd(object):
 
     def set_rx(self, value):
         diff = self.rx_value != value
+
+        # we should really deep copy here, but it'd be very inefficient
         self.rx_value = value
         
-        if diff:
-            for cb in self.rx_subscribers:
-                cb(self)
-
-    def subscribe_to_rx_change(self, callback):
-        self.rx_subscribers.add(callback)
+        return diff
 
     @property
     def tx(self):
@@ -78,12 +94,16 @@ class ChannelEnd(object):
 
     @tx.setter
     def tx(self, value):
-        self.tx_setter(value)
+        self.tx_value = value
+
+    def send(self):
+        v = self.tx_value
+        self.tx_value = None
+
+        return self.pair.set_rx(v)
 
 class Component(object):
-    def __init__(self, channel_end_factory):
-        self.channel_end_factory = channel_end_factory
-
+    def __init__(self):
         self.config = {
             "channel_keys": set()
         }
@@ -100,40 +120,39 @@ class Component(object):
         self.config["channel_keys"].add(key)
 
         # probably not the best way but its easy
-        channel_end = self.channel_end_factory(self)
+        channel_end = ChannelEnd(self)
         setattr(self, key, channel_end)
         return channel_end
 
 class ComponentUpdater(object):
     def __init__(self):
-        self.dirty_components = set()
-        self.clock_phase      = 0
-
-    def channel_end_rx_changed(self, channel_end):
-        self.dirty_components.add(channel_end.component)
-
-    def channel_end_factory(self, component):
-        channel_end = ChannelEnd(component)
-        channel_end.subscribe_to_rx_change(self.channel_end_rx_changed)
-        return channel_end
+        self.clock_phase = 0
 
     def clock(self, components):
         # TODO: move clock outside of this into processor
         self.clock_phase = 1 - self.clock_phase
 
+        dirty_components = set()
         for component in components.itervalues():
             stateful = component.update_state(self.clock_phase)
+
             if stateful:
-                self.dirty_components.add(component)
+                dirty_components.add(component)
+
+        return dirty_components
                 
-    def propagate(self):
-        while self.dirty_components:
-            component = self.dirty_components.pop()
+    def propagate(self, dirty_components):
+        dirty_components = copy.copy(dirty_components)
+        while dirty_components:
+            component = dirty_components.pop()
             component.update_channels(self.clock_phase)
 
+            channels = (getattr(component, key) for key in component.config["channel_keys"])
+            dirty_components.update(channel.component for channel in channels if channel.send())
+
 class DictBroadcastBus(Component):
-    def __init__(self, channel_end_factory):
-        super(DictBroadcastBus, self).__init__(channel_end_factory)
+    def __init__(self):
+        super(DictBroadcastBus, self).__init__()
 
         self.bus_channel_counter = 0
 
@@ -145,15 +164,15 @@ class DictBroadcastBus(Component):
     def update_channels(self, clock_phase):
         channel_ends = list(getattr(self,"channel_{}".format(i)) for i in xrange(self.bus_channel_counter))
 
-        dicts = (channel_end.rx for channel_end in channel_ends)
-        out = dict(itertools.chain.from_iterable(dict_.iteritems() for dict_ in dicts if isinstance(dict_, dict)))
+        dicts = (channel_end.rx for channel_end in channel_ends if isinstance(channel_end.rx, dict))
+        out = dict(itertools.chain.from_iterable(dict_.iteritems() for dict_ in dicts))
 
         for channel_end in channel_ends:
             channel_end.tx = out
 
 class DirectionalBus(Component):
-    def __init__(self, channel_end_factory):
-        super(DirectionalBus, self).__init__(channel_end_factory)
+    def __init__(self):
+        super(DirectionalBus, self).__init__()
         
         self.dirbus_channel_counter = 0
 
@@ -167,8 +186,8 @@ class DirectionalBus(Component):
             getattr(self, "channel_{}".format(i - 1)).tx = getattr(self, "channel_{}".format(i)).rx
 
 class ChannelBuffer(Component):
-    def __init__(self, channel_end_factory):
-        super(ChannelBuffer, self).__init__(channel_end_factory)
+    def __init__(self):
+        super(ChannelBuffer, self).__init__()
 
         self.add_channel("A")
         self.add_channel("B")
@@ -191,49 +210,44 @@ class ChannelBuffer(Component):
         else:
             return False
 
-# NOTE technically it's InstructionFetchFromCache
 class InstructionFetch(Component):
-    def __init__(self, channel_end_factory, instructions):
-        super(InstructionFetch, self).__init__(channel_end_factory)
+    def __init__(self, instructions):
+        super(InstructionFetch, self).__init__()
+
+        self.add_channel("pc")
+        self.add_channel("stall")
 
         self.add_channel("instruction")
-        self.add_channel("stall")
+
+        self.add_channel("rob")
 
         self.config["instructions"] = instructions
 
         self.state["instruction"] = None 
-        #{
-        #    "instruction": ("NOOP",0,0,0,0),
-        #    "pc": 0,
-        #    "pc_next": 1
-        #}
-
-        self.state["pc"] = 0
 
     def update_channels(self, clock_phase):
         self.instruction.tx = self.state["instruction"]
 
     def update_state(self, clock_phase):
         if not self.stall.rx and clock_phase == 0: # ph2
-            self.state["instruction"] = {
-                "instruction": self.config["instructions"][self.state["pc"]],
-                "pc": self.state["pc"],
-                "pc_next": self.state["pc"] + 1,
-            }
+            pc = self.pc.rx
 
-            self.state["pc"] = self.state["pc"] + 1
+            self.state["instruction"] = {
+                "instruction": self.config["instructions"][pc],
+                "pc": pc,
+            }
 
             return True
 
         return False
 
-class SmartPC(Component):
-    def __init__(self, channel_end_factory, instructions):
-        super(SmartPC, self).__init__(channel_end_factory)
+class PCPredictor(Component):
+    def __init__(self, instructions):
+        super(PCPredictor, self).__init__()
 
-        self.add_channel("pc")     # this output magically updates by predicting
-        self.add_channel("set_pc") # this should only be set on a mispredict 
-        self.add_channel("stall")  # this should be set when a buffer is full somewhere
+        self.add_channel("pc")         # this output magically updates by predicting
+        self.add_channel("commit_bus") # this should only be set on a mispredict 
+        self.add_channel("stall")      # this should be set when a buffer is full somewhere
 
         self.state["pc"] = 0
 
@@ -244,25 +258,89 @@ class SmartPC(Component):
 
     def update_state(self, clock_phase):
         if clock_phase == 1: # ph1
-            # recieve PC from BUS or something where the predictor was wrong
+            # this may change
+            commit = self.commit_bus.rx
+
+            if commit is not None and "pc" in commit:
+                self.state["pc"] = commit["pc"]
+                # TODO update history
+                
+                return True
+
         else: # ph2
             # predict next PC
+            self.state["pc"] += 1
+
+            return True
 
         return False
 
+class ReorderBuffer(Component):
+    def __init__(self, instructions):
+        super(ReorderBuffer, self).__init__()
+        
+        record_fields = ["pc", "dest", "dest_result", "pc_result", "_instruction"]
+        
+        self.config["max_size"] = 20
+        self.state["buffer"]    = list(dict((f, None) for f in record_fields) for _ in xrange(size))
+        self.state["start"]     = 0
+        self.state["size"]      = 0
+    
+        self.add_channel("control")
 
-class InstructionOrderBuffer(Component):
-    def __init__(self, channel_end_factory, instructions):
-        super(InstructionOrderBuffer, self).__init__(channel_end_factory)
+    def update_channels(self, clock_phase):
+        self.control.tx = {
+            "next_free": None if self.state["size"] == self.config["max_size"] \
+                    else (self.state["start"] + self.state["size"]) % self.config["max_size"],
+        }
 
-        # each stage pushes through the state of each record
-        # it either fails and we unwind
-        # or succeeds and we push the changes through to all components that care (Predictor, Issue, RF, memory?)
+    # or have a next PC field, when it's None it means all following instructions are speculative. When it's set, it's either going to be wrong or right
+    # maybe specialise the records, that is, once we decode we replace Record with like LoadRecord or something? or Store, idk whih
+    # https://courses.cs.washington.edu/courses/cse471/07sp/lectures/Lecture4.pdf
+    # slide 4
 
+    def update_record(self, record_key, values={}):
+        for key, value in values.iteritems():
+            assert self.state["buffer"][record][key] == None
+
+            self.state["buffer"][record][key] = value
+
+    def clear_record(self, record_key):
+        record = self.state["buffer"][record_key]
+        for key in record.iterkeys():
+            record[key] = None
+
+    # https://classes.cs.uchicago.edu/archive/2016/fall/22200-1/lecture_notes/li-cmsc22200-aut16-lecture9.pdf
+
+    '''
+    Fetch is to set just pc and _instruction
+    Decode is to set dest, possibly pc_result
+    Execute is to set pc_result ALWAYS. also sets dest_result if dest isn't None
+    '''
+    def update_state(self, clock_phase):
+        if self.control.tx is not None:
+            # all updates keyed by RoB entry id
+            for key, control in self.control.tx.iteritems():
+                # if it's a new entry from fetch, increase size 
+                if key == (self.state["start"] + self.state["size"]) % self.config["max_size"]:
+                    self.state["size"] += 1
+
+                assert key in self.key_iterator()
+
+                self.update_record(key, control)
+
+            for key in self.key_iterator():
+                # check for inconsistencies
+                # commit start of queue when it's ready
+
+
+
+    def key_iterator(self):
+        return ((self.state["start"] + i ) % self.config["max_size"] for i in xrange(self.state["size"]))
 
 class Decoder(Component):
-    def __init__(self, channel_end_factory):
-        super(Decoder, self).__init__(channel_end_factory)
+    def __init__(self):
+        super(Decoder, self).__init__()
 
         self.add_channel("instruction")
         self.add_channel("decoded_instruction")
@@ -317,7 +395,7 @@ class Decoder(Component):
             EU_control = {"op":"TRUE"}
 
             EU_data = {
-                "pc_true": (False, None, immediate) if opcode == "J" \ 
+                "pc_true": (False, None, immediate) if opcode == "J" \
                       else (True, reg_read_sel1, None),
             }
 
@@ -333,65 +411,69 @@ class Decoder(Component):
                 "EU_data": EU_data,
                 "EU_write_reg": EU_write_reg,
             }
-        else:
-            self.decoded_instruction.tx = None
 
+
+
+# Add a component which reads from both RegisterFile and RaT, just one if they're combined?
+#        if self.decoded_instruction.rx is not None:
+#            decoded_instruction = self.decoded_instruction.rx.copy()
+#            decoded_instruction["EU_data"] = dict((k, (True, r, self.state["registers"][r]) if is_reg else (False, None, v)) \
+#                    for k, (is_reg, r, v) in decoded_instruction["EU_data"].iteritems())
+#            
+#            self.decoded_instruction_filled.tx = decoded_instruction
+
+class RegisterAliasTable(Component):
+    def __init__(self, num_registers):
+        super(RegisterAliasTable, self).__init__()
+
+        self.add_channel("set")
+        self.add_channel("get")
+
+        self.state["register_aliases"] = list(None for i in xrange(num_registers))
+
+    def update_channels(self, clock_phase):
+        if self.get.rx is not None:
+            reply = {}
+            
+            # assume it's an array for now
+            for k in self.get.rx:
+                reply[k] = self.state["register_aliases"][k]
+
+            self.get.tx = reply
+
+    def update_state(self, clock_phase):
+        if self.set.rx is not None:
+            for k, v in self.set.rx.iteritems():
+                self.state[k] = v
+
+            return True
 
 class RegisterFile(Component):
-    # Listen on CDB and update entries
-    # have a 'instruction passthrough' which updates instruction register values
-    
-    # write registers on 0, read on 1
-    def __init__(self, channel_end_factory, num_registers):
-        super(RegisterFile, self).__init__(channel_end_factory)
+    def __init__(self, num_registers):
+        super(RegisterFile, self).__init__()
 
-        # connect to CDB
-        self.add_channel("update")
-
-        # connect to decoder
-        self.add_channel("decoded_instruction")
-
-        # connect to issuer
-        self.add_channel("decoded_instruction_filled")
+        self.add_channel("set")
+        self.add_channel("get")
     
         self.state["registers"] = list(0 for i in xrange(num_registers))
 
-
     def update_channels(self, clock_phase):
-        if self.decoded_instruction.rx is not None:
-            decoded_instruction = self.decoded_instruction.rx.copy()
-            decoded_instruction["EU_data"] = dict((k, (True, r, self.state["registers"][r]) if is_reg else (False, None, v)) \
-                    for k, (is_reg, r, v) in decoded_instruction["EU_data"].iteritems())
-            
-            self.decoded_instruction_filled.tx = decoded_instruction
-        else:
-            self.decoded_instruction_filled.tx = None
-
-        self.update.tx = {}
-
+        self.get.tx = dict(enumerate(self.state["registers"]))
+        
     def update_state(self, clock_phase):
-        # onl write on PH1, not PH2
-        if clock_phase == 1 and self.update.rx is not None:
-            register_updates = self.update.rx
-            
-            # probably gonna be a table of indicies to values
-            for r, v in register_updates.iteritems():
-                if r not in self.state["registers"]:
-                    continue
-
+        if self.set.rx is not None:
+            for r, v in self.set.rx.iteritems():
                 if r == 0:
                     raise "DONT WRITE TO R0!"
                 
                 self.state["registers"][r] = v
 
             return True
-        else:
-            return False
         
 
 class SimpleInstructionIssuer(Component):
-    def __init__(self, channel_end_factory):
-        super(SimpleInstructionIssuer, self).__init__(channel_end_factory)
+    def __init__(self):
+        super(SimpleInstructionIssuer, self).__init__()
 
         self.add_channel("decoded_instruction")
         self.add_channel("stall")
@@ -401,11 +483,12 @@ class SimpleInstructionIssuer(Component):
 
         self.state["EU_states"] = {
             "alu": (False, None), # (inuse, destreg)
+            "bru": (False, None),
         }
 
     def assign_instruction_eu(self):
         # NOTE this causes stalls until the branch instruction is completed
-        if self.state["bru"] == (True, "pc"):
+        if self.state["EU_states"]["bru"] == (True, "pc"):
             return (True, None)
 
         d_instruction = self.decoded_instruction.rx
@@ -439,12 +522,6 @@ class SimpleInstructionIssuer(Component):
         return (stall, EU)
 
     def update_channels(self, clock_phase):
-        # TODO assign all EU's None
-        #      actually that'll cause a bug. we need to store prev value in channelend at start of update?
-        self.alu.tx = None
-        self.bru.tx = None
-        self.stall.tx = False
-
         if self.decoded_instruction.rx is not None:
             stall, EU = self.assign_instruction_eu()
             
@@ -455,8 +532,6 @@ class SimpleInstructionIssuer(Component):
                     "data": dict((k,v) for k,(_,_,v) in self.decoded_instruction.rx["EU_data"].iteritems()),
                     "write_reg": self.decoded_instruction.rx["EU_write_reg"]
                 }
-
-        self.register_update.tx = {}
 
     # we can use the same function in update_state because all update_states are essentially called in parallel, so the inputs will be the same
     def update_state(self, clock_phase):
@@ -477,8 +552,8 @@ class SimpleInstructionIssuer(Component):
                         self.state["EU_states"][eus[0]] = (False, None)
 
 class BRU(Component):
-    def __init__(self, channel_end_factory):
-        super(BRU, self).__init__(channel_end_factory)
+    def __init__(self):
+        super(BRU, self).__init__()
 
         self.add_channel("rs")
         self.add_channel("result")
@@ -502,10 +577,6 @@ class BRU(Component):
     def update_channels(self, clock_phase):
         if clock_phase == 0 and self.state["current_operation"] is not None:
             self.result.tx = {"pc": self.get_current_op_result()}
-        else:
-            self.result.tx = {}
-
-    self.rs.tx = {}     
     
     def update_state(self, clock_phase):
         if clock_phase == 1: #ph1
@@ -540,8 +611,8 @@ class ALU(Component):
         "XOR":  (1,lambda ins: ins["a"] ^ ins["b"]),
     }
 
-    def __init__(self, channel_end_factory):
-        super(ALU, self).__init__(channel_end_factory)
+    def __init__(self):
+        super(ALU, self).__init__()
 
         self.add_channel("rs")
         self.add_channel("result")
@@ -561,11 +632,6 @@ class ALU(Component):
             self.result.tx = {
                 self.state["current_operation"]["dest"]: self.get_current_op_result()
             }
-        else:
-            self.result.tx = {} # or None?
-
-
-        self.rs.tx = {}
 
     def update_state(self,clock_phase):
         if clock_phase == 1: #ph1
@@ -591,68 +657,48 @@ class ALU(Component):
 
         return True
 
-#    def update_state(self, clock_phase):
-   #     if clock_phase == 1:
-   #         if self.state["cycles_left"] > 0:
-   #             self.state["cycles_left"] -= 1
-
-   #         if self.rs.rx["control"] != None:
-   #             instruction = self.rs.rx["instruction"]
-   #             
-   #             # need to broadcast the operation result with the written register on finish
-   #             self.state["current_instruction"] = instruction
-   #             self.state["cycles_left"] = ALU.operations[ALU.get_op(instruction[0])][0]
-   #         
-            # nope
-    #        if self.state["current_instruction"] != None and self.state["cycles_left"] == 0:
-    #            self.state["result"] = ALU.operations[ALU.get_op(instruction[0])][1](
-
 
 class Processor(object):
     def __init__(self, instructions, data):
         self.cu = ComponentUpdater()
 
         self.setup_components(instructions, data)
-    
+
+        self.propagate(self.components) 
     def step(self):
-        self.cu.clock(self.components)
-        # maybe subscribe every time its dirtied, it's a set so its fast
-        self.cu.propagate()
+        dirty = self.cu.clock(self.components)
+        self.cu.propagate(dirty)
 
     def setup_components(self, instructions, data):
-        c = self.cu.channel_end_factory
-
-        # directly connect 
-        # could technically connect over another medium ie socket for true multprocess
         def connect(a, b):
-            a.tx_setter = b.set_rx
-            b.tx_setter = a.set_rx
+            a.pair, b.pair = b, a
 
-        instruction_fetch    = InstructionFetch(c, instructions)
-        instruction_fetch_cb = ChannelBuffer(c)
+        instruction_fetch    = InstructionFetch(instructions)
+        instruction_fetch_cb = ChannelBuffer()
         connect(instruction_fetch.instruction, instruction_fetch_cb.A)
 
-        decoder = Decoder(c)
-        connect(instruction_fetch_cb.B,decoder.instruction)
+        #decoder = Decoder()
+        #connect(instruction_fetch_cb.B,decoder.instruction)
    
-        register_file = RegisterFile(c, 16)
-        connect(decoder.decoded_instruction, register_file.decoded_instruction)
+        #register_file = RegisterFile(16)
+        #connect(decoder.decoded_instruction, register_file.decoded_instruction)
 
-        sii = SimpleInstructionIssuer(c)
-        connect(register_file.decoded_instruction_filled, sii.decoded_instruction)
+        #sii = SimpleInstructionIssuer()
+        #connect(register_file.decoded_instruction_filled, sii.decoded_instruction)
 
-        # this is also called common data bus
-        write_back_bus = DictBroadcastBus(c)
-        connect(write_back_bus.add_bus_channel(), sii.register_update)
-        connect(write_back_bus.add_bus_channel(), register_file.update)
+        ## this is also called common data bus
+        #write_back_bus = DictBroadcastBus()
+        #connect(write_back_bus.add_bus_channel(), sii.register_update)
+        #connect(write_back_bus.add_bus_channel(), register_file.update)
 
-        alu = ALU(c)
-        connect(write_back_bus.add_bus_channel(), alu.result)
-        connect(sii.alu, alu.rs)
+        #alu = ALU()
+        #connect(write_back_bus.add_bus_channel(), alu.result)
+        #connect(sii.alu, alu.rs)
 
-        staller = DirectionalBus(c)
-        connect(staller.add_dirbus_channel(), instruction_fetch.stall) 
-        connect(staller.add_dirbus_channel(), sii.stall) 
+        #staller = DirectionalBus()
+        #connect(staller.add_dirbus_channel(), instruction_fetch.stall) 
+        #connect(staller.add_dirbus_channel(), sii.stall) 
+
         # need a register alias table
         # points to the instruction which holds what the register will eventually be
         # if no instruction, 'points' to the actual register

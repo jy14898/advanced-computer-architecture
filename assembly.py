@@ -36,7 +36,7 @@ NOOP = namedtuple("NOOP", [])
 instruction = namedtuple("instruction", ["opcode", "reg_read_sel1", "reg_read_sel2", "reg_write_sel", "immediate"])
 
 def r(reg):
-    return int(reg[-1:])
+    return int(reg[1:])
 
 def to_instruction(line):
     if isinstance(line, ADD):
