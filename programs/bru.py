@@ -9,9 +9,11 @@ program = {
         ADDI("R3", "R1", 0),    # int c = a;
         ADDI("R1", "R2", 0),    # a = b;
         ADD ("R2", "R2", "R3"), # b = b + c;
+        SUBI("R3", "R2", 100),  # c = b - 100;
+        BGTZ(8, "R3"),          # if (c > 0) break;
         # }
         J(2),
-
+        HALT(),
         NOOP(),
         NOOP(),
         NOOP()

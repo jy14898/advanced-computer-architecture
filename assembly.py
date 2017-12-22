@@ -32,6 +32,8 @@ STOR = namedtuple("STOR", ["rd", "rv", "imm"]) # MEM[rv + imm] = rd
 
 NOOP = namedtuple("NOOP", [])
 
+HALT = namedtuple("HALT", [])
+
 # dont create directly
 instruction = namedtuple("instruction", ["opcode", "reg_read_sel1", "reg_read_sel2", "reg_write_sel", "immediate"])
 
@@ -95,6 +97,9 @@ def to_instruction(line):
 
     if isinstance(line, NOOP):
         return instruction("NOOP", 0, 0, 0, 0)
+
+    if isinstance(line, HALT):
+        return instruction("HALT", 0, 0, 0, 0)
 
 def assemble(program):
     return list(to_instruction(line) for line in program)

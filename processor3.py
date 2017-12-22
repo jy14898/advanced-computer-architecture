@@ -16,39 +16,30 @@ TODO
 
 
 
-Things to think/do:
-    - Last time I checked, the PC was getting set twice to 0 after the jump. 
-        Nah it's fine
-
-    - Rob doesnt actually set variables yet. dont even have a register file
-    - Started on register renaming. Need to think about how we're gonna do registers (pre/post RS)
-      - Once renamed, the operands are never gonna get renamed again. at worst they get unrenamed
-      - for RF after RS, we only need to get the values which werent renamed yet.
-      - will it ever occur that a rob_id will become invalid and we didn't recieve the value? could always rebroadcast on commit?
-      - i suppose the second question to that is will we ever miss the value. could just constantly broadcast/poll. but that's nasty
-      - doesnt seem impossible that an instruction can come in where the EU has finished a while ago, but it hasnt been committed yet.
-      - alright. store the latest value in the RAT? on rename set to None? implies we're doing register fetch before RS. 
-      - that or query the whole RoB. technically probably the same when i implement tho
-
-      - probably gonna do RF and RoB fetch first, 'technically' you would fetch both and then select from RAT but i can cheat
-      - if RoB are None, wait for them to arrive. boom
-
-    - Need to make a proper RS which checks for hazards
-    - Really need to get memory back in the loop
-    - just a thought. we don't wanna set the PC predictors history if it was speculative. or do we?
-        maybe set the history when we commit
-
-
 Plan:
-    renaming ~DONE~!!!
-    Instruction filling ~DONE~!!!!
-    proper reservation station ~I think so?~!!!
-    make resultsbus and unify code in RoB ~I think so?~
-    hook up ALU/AGU/BR ~meh idk~
+  x add a halt op
+        sets a flag in RoB which stops fetching new things
+        eventually it'll be just the HALT instruction left, and nothing will update
 
-    current bug is RS is randomly clearing
+  x print out commits/clock
+  x finish branch unit
+  h add load/store
+        Modern machines use Load/store queue. similar to RoB, when decoded add entry, update as we go along, apply once instruction committed in RoB
+        I think data bypass allowed between the queues? ie if you load from an address in the store queue, it's faster
+        for now just do loads and stores in order?
+        have a queue that the LSU loads its things into. Can immediately return if this queue is not full.
+        then later on resolve the loads?
+        
+        we can go even simpler
+        1 load/store unit. only allow 1 load/store instruction in RS at any time. if another tries to come in, stall
 
-    if all above works. finish branch unit. add load/store. make branch predictor smarter. maybe do exceptions. write some programs?
+    make branch predictor smarter
+    multiple fetch/issue
+
+    Make JR fire off at issue stage?
+    maybe do exceptions
+    write some programs - got a few now. maybe add a sort and something else?
+
     GUI? at least output instructions per cycle
 
       ok. don't predict exceptions
@@ -269,12 +260,13 @@ class InstructionFetch(Component):
         self.add_channel("instruction")
 
         self.config["instructions"] = instructions
-
         self._state = {
             "pc": None,
             "instruction": None,
             "rob_id": None,
         }
+
+        self.default_instruction = ("NOOP",0,0,0,0)
         
     def update(self):
         with self.State() as state, self.Printer() as prints:
@@ -288,9 +280,14 @@ class InstructionFetch(Component):
 
             # have this after the output so that it's one behind
             if self.pc.rx is not None and not self.stall.rx and self.rob.rx is not None:
+                try:
+                    instruction = self.config["instructions"][self.pc.rx]
+                except IndexError:
+                    instruction = self.default_instruction
+
                 state.update({
                     "pc": self.pc.rx,
-                    "instruction": self.config["instructions"][self.pc.rx],
+                    "instruction": instruction,
                     "rob_id": self.rob.rx,
                 })
 
@@ -318,7 +315,7 @@ class InstructionFetch(Component):
 
 
 class ReorderBuffer(Component):
-    record_fields = ["instruction_pc", "dest", "dest_value", "pc_value", "exception_id_value", "exception_pc_value", "_instruction"]
+    record_fields = ["instruction_pc", "dest", "dest_value", "pc_value", "exception_id_value", "exception_pc_value", "_instruction", "type"]
 
     def __init__(self, max_size, num_commit):
         super(ReorderBuffer, self).__init__()
@@ -329,6 +326,9 @@ class ReorderBuffer(Component):
         self._state["buffer"]   = list(dict((f, None) for f in ReorderBuffer.record_fields) for _ in xrange(self.config["max_size"]))
         self._state["start"]    = 0
         self._state["size"]     = 0
+        self._state["halt"]     = False
+
+        self._state["_num_instructions"] = 0
     
         self.add_channel("pc_predictor")
         self.add_channel("fetch")
@@ -361,12 +361,16 @@ class ReorderBuffer(Component):
 
         return mapping
 
-    # TODO order the updates applied, such that if the earlier ones flush, no need to do the later
-    # can get away with just doing them in reverse order
     def update_entry(self, state, rob_id, update):
         if rob_id in self.key_iterator(state):
             entry = state["buffer"][rob_id]
             entry.update(update)
+            
+            flush = False
+
+            if entry["type"] == "HALT":
+                state["halt"] = True
+                flush = True
 
             if entry["pc_value"] is not None:
                 flush = True
@@ -381,27 +385,23 @@ class ReorderBuffer(Component):
                             # don't flush if we predicted correctly
                             flush = False
 
-                if flush:
-                    keys = list(self.key_iterator(state))
-                    pos  = keys.index(rob_id)
-                    flushed_keys = list(k for i, k in enumerate(keys) if i > pos)
+            if flush:
+                keys = list(self.key_iterator(state))
+                pos  = keys.index(rob_id)
+                flushed_keys = list(k for i, k in enumerate(keys) if i > pos)
 
-                    #prints("Flushing entries {}".format(flushed_keys))
-                    
-                    # make the queue finish at pos
-                    state["size"] = pos + 1
+                # make the queue finish at pos
+                state["size"] = pos + 1
 
-                    # notify components to no longer work on these entries
-                    # NOTE I don't know if this will still work now that we're calling this multiple times
-                    self.cancel.tx = {
-                        "keys": flushed_keys
-                    }
-                    
-                    # update PC
-                    # TODO add the pc -> pc_next mapping here so that predictor can learn from it
-                    self.pc_predictor.tx = entry["pc_value"]
-                    
-                    return True
+                self.cancel.tx = {
+                    "keys": flushed_keys
+                }
+                
+                # update PC
+                # TODO add the pc -> pc_next mapping here so that predictor can learn from it
+                self.pc_predictor.tx = entry["pc_value"]
+                
+                return True
 
     def update(self):
         with self.State() as state, self.Printer() as prints:
@@ -423,16 +423,18 @@ class ReorderBuffer(Component):
 
                         state["start"] = (state["start"] + 1) % self.config["max_size"]
                         state["size"] -= 1
+
+                        state["_num_instructions"] += 1
                 else:
                     break
 
             self.rf_write.tx = commit_registers
 
 
-            self.fetch.tx = None if state["size"] >= self.config["max_size"] \
+            self.fetch.tx = None if state["size"] >= self.config["max_size"] or state["halt"] \
                         else self.get_next_free(state)
         
-            if self.fetch.rx is not None:
+            if self.fetch.rx is not None and not state["halt"]:
                 rob_id = self.get_next_free(state)
                 entry = state["buffer"][rob_id]
 
@@ -560,13 +562,13 @@ class Decoder(Component):
                 EU_data = {
                     "a": ((reg_prefix, reg_read_sel1), None),
                     "b": ((reg_prefix, reg_read_sel2), None) if not is_immediate else (None, immediate),
-                    "pc_add_one": (None, pc + 1),
+                    "pc_add_one": (None, pc_add_one),
                 }
 
                 EU_write_reg = reg_write_sel
 
-            elif opcode in ["BEQ","BNE", "GEZ", "GTZ", "LEZ", "LTZ"]:
-                EU = "BR"
+            elif opcode in ["BEQ","BNE", "BGEZ", "BGTZ", "BLEZ", "BLTZ"]:
+                EU = "BRU"
                 EU_control = {
                     "op": opcode[1:] if opcode in ["BEQ","BNE"] else opcode,
                 }
@@ -574,7 +576,7 @@ class Decoder(Component):
                 EU_data = {
                     "a": ((reg_prefix, reg_read_sel1), None),
                     "pc_true": (None, immediate),
-                    "pc_false": (None, pc_next),
+                    "pc_false": (None, pc_add_one),
                 }
 
                 if opcode in ["BEQ", "BNE"]:
@@ -583,10 +585,15 @@ class Decoder(Component):
                 EU_write_reg = None 
 
             elif opcode in ["J"]:
-                # this one can be fired off immediately
                 self.rob.tx = {
                     "rob_id": rob_id,
                     "pc_value": immediate
+                }
+
+            elif opcode in ["NOOP"]:
+                self.rob.tx = {
+                    "rob_id": rob_id,
+                    "pc_value": pc_add_one
                 }
 
             elif opcode in ["JR"]:
@@ -597,7 +604,28 @@ class Decoder(Component):
                 }
 
                 EU_write_reg = None
-            
+
+            elif opcode in ["HALT"]:
+                self.rob.tx = {
+                    "rob_id": rob_id,
+                    "type": "HALT",
+                }
+
+            elif opcode in ["LOAD", "STOR"]:
+                EU = "LSU"
+                EU_control = { "op": opcode, }
+                EU_data = {
+                    "addr_a": (None, immediate),
+                    "addr_b": ((reg_prefix, reg_read_sel1), None),
+                    "pc_add_one": (None, pc_add_one),
+                }
+
+                if opcode in ["STOR"]:
+                    EU_data["data"] = ((reg_prefix, reg_read_sel2), None)
+                    EU_write_reg = None
+
+                if opcode in ["LOAD"]:
+                    EU_write_reg = reg_write_sel
 
             if EU is not None:
                 cancel = self.rob_cancel.rx
@@ -638,6 +666,7 @@ class InstructionRegisterLoader(Component):
                     # i shouldnt actualy have to deep copy, but i dont trust my logic elsewhere
                     instruction = copy.deepcopy(self.ins_in.rx)
 
+                    prints(instruction["EU_data"])
                     for k, (source, value) in instruction["EU_data"].iteritems():
                         if source is not None and source[0] == reg_prefix:
                             if source[1] in renames:
@@ -687,17 +716,16 @@ class ReservationStation(Component):
         with self.State() as state, self.Printer() as prints:
             cancel = self.rob_cancel.rx
             if cancel is not None and "keys" in cancel:
-                prints("GOT A CANCEL")
-                prints("LEN BEFORE {}".format(len(state["slots"])))
                 state["slots"][:] = list(slot for slot in state["slots"] if slot["rob_id"] not in cancel["keys"])
-                prints("LEN AFTER {}".format(len(state["slots"])))
-                prints("{}".format(cancel))
 
-            if self.instruction.rx is not None:
-                if len(state["slots"]) < self.config["num_slots"]:
-                    # NOTE quick fix for full RoB
-                    if self.instruction.rx["rob_id"] not in (s["rob_id"] for s in state["slots"]):
-                        state["slots"].append(self.instruction.rx)
+            # NOTE quick fix for full RoB
+            if self.instruction.rx is not None and self.instruction.rx["rob_id"] not in (s["rob_id"] for s in state["slots"]):
+                # check if it's LOAD/STORE, if we have one pls stall
+                # simplification to keep load/stores in order
+                lsu_stall = self.instruction.rx["EU"] == "LSU" and any(slot["EU"] == "LSU" for slot in state["slots"])
+
+                if len(state["slots"]) < self.config["num_slots"] and not lsu_stall:
+                    state["slots"].append(self.instruction.rx)
                 else:
                     self.stall.tx = True
             
@@ -733,12 +761,6 @@ class ReservationStation(Component):
                     }
                     dispatched_slot_keys.append(slot_key)
 
-            # update slots
-            #print "A",len(state["slots"])
-            #for slot_key in dispatched_slot_keys:
-            #    print "B", slot_key
-            #    del state["slots"][slot_key]
-
             state["slots"][:] = (v for k,v in enumerate(state["slots"]) if k not in dispatched_slot_keys)
 
             for v in state["slots"]:
@@ -767,54 +789,113 @@ class RegisterFile(Component):
 
             self.get.tx = dict(enumerate(state["registers"]))
 
+class LSU(Component):
+    def __init__(self, data):
+        super(LSU, self).__init__()
+
+        self.add_channel("dispatcher")
+        self.add_channel("result")
+
+        self.add_channel("rob_cancel")
+
+        self._state["cycles_left"] = 0
+        self._state["current_op"] = None
+
+        # TODO should really make this a dict
+        self._state["memory"] = copy.deepcopy(data)
+
+    def update(self):
+        with self.Printer() as prints, self.State() as state:
+            cancel = self.rob_cancel.rx
+            if state["current_op"] is not None and cancel is not None \
+                    and "keys" in cancel and state["current_op"]["dest"] in cancel["keys"]: 
+                state["cycles_left"] = 0
+                state["current_op"]  = None
+                prints("Current OP was canceled by RoB")
+
+            if state["cycles_left"] > 0:
+                state["cycles_left"] -= 1
+
+            if state["cycles_left"] == 0 and state["current_op"] is not None:
+                op = state["current_op"]
+                if op["control"]["op"] == "LOAD":
+                    self.result.tx = {
+                        op["dest"]: {
+                            "pc_value": op["data"]["pc_add_one"],
+                            "dest_value": state["memory"][op["data"]["addr_a"] + op["data"]["addr_b"]],
+                        }
+                    }
+                else:
+                    state["memory"][op["data"]["addr_a"] + op["data"]["addr_b"]] = op["data"]["data"]
+                    self.result.tx = {
+                        op["dest"]: {
+                            "pc_value": op["data"]["pc_add_one"],
+                        }
+                    }
+
+                state["current_op"] = None
+            
+            if state["current_op"] is None:
+                self.dispatcher.tx = True
+
+            op = self.dispatcher.rx
+            prints("Recieved {}".format(op))
+
+            if op is not None and state["current_op"] is None:
+                state["current_op"] = op
+                state["cycles_left"] = 1 if op["control"]["op"] == "LOAD" else 6
+
+            prints("Currently executing {}".format(state["current_op"]))
+
+
 class BRU(Component):
     def __init__(self):
         super(BRU, self).__init__()
 
-        self.add_channel("rs")
+        self.add_channel("dispatcher")
         self.add_channel("result")
 
-        self.state["current_operation"] = None
+        self.add_channel("rob_cancel")
+
+        self._state["current_op"] = None
 
     ops = {
-        "EQ": lambda ins: True if ins["a"] == ins["b"] else False,
-        "NE": lambda ins: True if ins["a"] != ins["b"] else False,
-        "GEZ": lambda ins: True if ins["a"] >= 0 else False,
-        "GTZ": lambda ins: True if ins["a"] >  0 else False,
-        "LEZ": lambda ins: True if ins["a"] <= 0 else False,
-        "LTZ": lambda ins: True if ins["a"] <  0 else False,
+        "EQ":   lambda ins: True if ins["a"] == ins["b"] else False,
+        "NE":   lambda ins: True if ins["a"] != ins["b"] else False,
+        "GEZ":  lambda ins: True if ins["a"] >= 0 else False,
+        "GTZ":  lambda ins: True if ins["a"] >  0 else False,
+        "LEZ":  lambda ins: True if ins["a"] <= 0 else False,
+        "LTZ":  lambda ins: True if ins["a"] <  0 else False,
         "TRUE": lambda _: True
     }
 
-    def get_current_op_result(self):
-        co = self.state["current_operation"]
-        return co["pc_true"] if BRU.ops[co["op"]](co) else co["pc_false"]
-
     def update(self):
-        if clock_phase == 0 and self.state["current_operation"] is not None:
-            self.result.tx = {"pc": self.get_current_op_result()}
-    
-    def update_state(self):
-        if clock_phase == 1: #ph1
-            self.state["current_operation"] = None
+        with self.Printer() as prints, self.State() as state:
+            cancel = self.rob_cancel.rx
+            if state["current_op"] is not None and cancel is not None \
+                    and "keys" in cancel and state["current_op"]["dest"] in cancel["keys"]: 
+                state["current_op"]  = None
+                prints("Current OP was canceled by RoB")
 
-            issue = self.rs.rx
-            if issue is not None:
-                # TODO: throw warning if currently executing?
-
-                print "BR recieved {}".format(self.rs.rx)
-                co = {
-                    "op": issue["control"]["op"],
-                    "a": issue["data"]["a"],
-                    "pc_true": issue["data"]["pc_true"],
-                    "pc_false": issue["data"]["pc_false"],
+            if state["current_op"] is not None:
+                op = state["current_op"]
+                self.result.tx = {
+                    op["dest"]: {
+                        "pc_value": op["data"]["pc_true"] if BRU.ops[op["control"]["op"][1:]](op["data"]) else op["data"]["pc_false"],
+                    }
                 }
+                state["current_op"] = None
+            
+            if state["current_op"] is None:
+                self.dispatcher.tx = True
 
-                if "b" in issue["data"]:
-                    co["b"] = issue["data"]["b"]
+            op = self.dispatcher.rx
+            prints("Recieved {}".format(op))
 
-                
-                self.state["current_operation"] = co
+            if op is not None and state["current_op"] is None:
+                state["current_op"] = op
+
+            prints("Currently executing {}".format(state["current_op"]))
 
 class ALU(Component):
     operations = {
@@ -894,6 +975,22 @@ class Processor(object):
             self.output(set(self.components.itervalues()))
             raise
 
+    def run_until_done(self):
+        cycle_count = 0
+        while True:
+            dirty = self.cu.clock(self.components)
+            updated = self.cu.propagate(dirty)
+
+            cycle_count += 1
+
+            if not updated:
+                break
+
+        instruction_count = self.components["rob"]._state_next["_num_instructions"]
+        print "{} instructions committed after {} cycles.".format(instruction_count, cycle_count)
+        print "{:.2f} instructions per cycle".format(float(instruction_count)/cycle_count)
+
+
     def step_quiet(self):
         dirty = self.cu.clock(self.components)
         updated = self.cu.propagate(dirty)
@@ -920,6 +1017,8 @@ class Processor(object):
         rs = ReservationStation(10)
 
         alus              = list(ALU() for _ in xrange(4))
+        brus              = list(BRU() for _ in xrange(1))
+        lsu               = LSU(data) 
         
         rob               = ReorderBuffer(128, 4)
         rob_cancel_bus    = DictBroadcastBus()
@@ -945,6 +1044,16 @@ class Processor(object):
             connect(results_bus.add_bus_channel(), alu.result)
         alu = None
 
+        for bru in brus:
+            connect(rob_cancel_bus.add_bus_channel(), bru.rob_cancel)
+            connect(rs.add_eu("BRU"), bru.dispatcher)
+            connect(results_bus.add_bus_channel(), bru.result)
+        bru = None
+
+        connect(rob_cancel_bus.add_bus_channel(), lsu.rob_cancel)
+        connect(rs.add_eu("LSU"), lsu.dispatcher)
+        connect(results_bus.add_bus_channel(), lsu.result)
+
         connect(irl.rat, rob.rat)
 
         connect(irl.rf_read , register_file.get)
@@ -963,4 +1072,5 @@ class Processor(object):
         # nice and hacky
         self.components = dict(i for i in locals().iteritems() if isinstance(i[1],Component))
         self.components.update(("alu_{}".format(i),alu) for i,alu in enumerate(alus))
+        self.components.update(("bru_{}".format(i),bru) for i,bru in enumerate(brus))
 
