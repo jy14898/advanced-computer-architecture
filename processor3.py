@@ -219,7 +219,7 @@ have proxy types for dict, list etc. then we can record changes that way
 '''
 
 class PCPredictor(Component):
-    def __init__(self, bht_size):
+    def __init__(self, bht_size, width):
         super(PCPredictor, self).__init__()
 
         self.add_channel("pc")    # this output magically updates by predicting
@@ -228,8 +228,10 @@ class PCPredictor(Component):
         self.add_channel("update_predictor") # set this before rob
 
         self.add_channel("stall") # this should be set when a buffer is full somewhere
+        
+        self.config["width"] = width
 
-        self._state["pc"] = 0
+        self._state["pc"] = [0,1,2,3]
 
         self._state["bht"] = list((0, 0, 0) for _ in xrange(bht_size))
         #(pc, counter, target)
@@ -259,24 +261,35 @@ class PCPredictor(Component):
             # if there's an update to the PC, take it
             if self.rob.rx is not None:
                 prints("ROB said to change next PC to {}".format(self.rob.rx))
-                state["pc"] = self.rob.rx
+                pcs = [self.rob.rx]
+                
+                for _ in xrange(1, self.config["width"]):
+                    pcs.append(self.predict_next(state, pcs[-1:][0]))
+
+                state["pc"] = pcs
 
             # predict next
             else: 
                 if not self.stall.rx:
-                    index = state["pc"] % len(state["bht"])
-                    entry = state["bht"][index]
-                    if entry[0] == state["pc"] and entry[1] > 1:
-                        state["pc"] = entry[2]
-                    else:
-                        state["pc"] = state["pc"] + 1
-
+                    pcs = [state["pc"][-1:][0]]
+                    for _ in xrange(1, self.config["width"]):
+                        pcs.append(self.predict_next(state, pcs[-1:][0]))
+                    
+                    state["pc"] = pcs
                     prints("predicted {}".format(state["pc"]))
                 else:
                     prints("stalled, so no change in pc")
 
+    def predict_next(self, state, pc):
+        index = pc % len(state["bht"])
+        entry = state["bht"][index]
+        if entry[0] == pc and entry[1] > 1:
+            return entry[2]
+        else:
+            return pc + 1
+
 class InstructionFetch(Component):
-    def __init__(self, instructions):
+    def __init__(self, instructions, width):
         super(InstructionFetch, self).__init__()
 
         self.add_channel("pc")
@@ -288,23 +301,26 @@ class InstructionFetch(Component):
         self.add_channel("instruction")
 
         self.config["instructions"] = instructions
-        self._state = {
+        self.config["width"] = width
+        self._state = dict((i, {
             "pc": None,
             "instruction": None,
             "rob_id": None,
-        }
+        }) for i in xrange(width))
 
         self.default_instruction = ("NOOP",0,0,0,0)
         
     def update(self):
         with self.State() as state, self.Printer() as prints:
-            if state["instruction"] is not None:
-                self.instruction.tx = {
-                    "instruction": state["instruction"],
-                    "pc": state["pc"],
-                    "pc_add_one": state["pc"] + 1, # technically this would be calculated here, so we can reuse it
-                    "rob_id": state["rob_id"],
-                }
+            instructions = {}
+            for i, instruction in state.iteritems():
+                if state["instruction"] is not None:
+                    self.instruction.tx = {
+                        "instruction": state["instruction"],
+                        "pc": state["pc"],
+                        "pc_add_one": state["pc"] + 1, # technically this would be calculated here, so we can reuse it
+                        "rob_id": state["rob_id"],
+                    }
 
             # have this after the output so that it's one behind
             if self.pc.rx is not None and not self.stall.rx and self.rob.rx is not None:
@@ -1041,8 +1057,9 @@ class Processor(object):
         def connect(a, b):
             assert a.pair is None and b.pair is None
             a.pair, b.pair = b, a
-
-        pc_predictor      = PCPredictor(64)
+        
+        issue_width = 4
+        pc_predictor      = PCPredictor(64, issue_width)
         instruction_fetch = InstructionFetch(instructions)
         staller           = DirectionalBus()
         decode            = Decoder()
