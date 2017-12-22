@@ -9,12 +9,10 @@ from contextlib import contextmanager
 from collections import namedtuple
 '''
 TODO
- maybe just have it decode type of inst, whether it may jump etc. then it listens on common jump bus
- decode stage can issue a jump
- BR unit can issue a jump
- https://www.google.co.uk/url?sa=i&rct=j&q=&esrc=s&source=images&cd=&ved=0ahUKEwiJy8OsrY3YAhVVFMAKHWocDaoQjRwIBw&url=http%3A%2F%2Fslideplayer.com%2Fslide%2F8969149%2F&psig=AOvVaw2T5DT1JukfNErtC3Y3HVt5&ust=1513473079353861
+    make it superscalar. need to make everything a list. start off with RoB providing up to n RoB ids.
+    idk if im allowed to predict each individually i guess so?
 
-
+    eh actually lets make PC predictor better?
 
 Plan:
   x add a halt op
@@ -33,7 +31,7 @@ Plan:
         we can go even simpler
         1 load/store unit. only allow 1 load/store instruction in RS at any time. if another tries to come in, stall
 
-    make branch predictor smarter
+  x make branch predictor smarter
     multiple fetch/issue
 
     Make JR fire off at issue stage?
@@ -219,20 +217,44 @@ for the roll-backable efficient dict
 when you access an element, return an object which is a proxy of that element
 have proxy types for dict, list etc. then we can record changes that way
 '''
+
 class PCPredictor(Component):
-    def __init__(self):
+    def __init__(self, bht_size):
         super(PCPredictor, self).__init__()
 
         self.add_channel("pc")    # this output magically updates by predicting
+
         self.add_channel("rob")   # this should only be set on a mispredict 
+        self.add_channel("update_predictor") # set this before rob
+
         self.add_channel("stall") # this should be set when a buffer is full somewhere
 
         self._state["pc"] = 0
+
+        self._state["bht"] = list((0, 0, 0) for _ in xrange(bht_size))
+        #(pc, counter, target)
 
     def update(self):
         with self.State() as state, self.Printer() as prints:
             prints("set pc.tx to state[\"pc\"]: {}".format(state["pc"]))
             self.pc.tx = state["pc"]
+
+            if self.update_predictor.rx is not None:
+                for pc, target in self.update_predictor.rx:
+                    index = pc % len(state["bht"])
+                    entry = state["bht"][index]
+                    if entry[0] == pc:
+                        if pc + 1 != target:
+                            state["bht"][index] = (pc, min(max(entry[1] + 1,0),3), target)  
+                        else:
+                            state["bht"][index] = (pc, min(max(entry[1] - 1,0),3), entry[2])  
+                    else:
+                        if pc + 1 != target:
+                            state["bht"][index] = (pc, 2, target)
+                        else:
+                            # use the old target address.
+                            state["bht"][index] = (pc, 1, entry[2]) 
+
 
             # if there's an update to the PC, take it
             if self.rob.rx is not None:
@@ -242,8 +264,14 @@ class PCPredictor(Component):
             # predict next
             else: 
                 if not self.stall.rx:
-                    prints("predicted state[\"pc\"] + 1: {}".format(state["pc"] + 1))
-                    state["pc"] = state["pc"] + 1
+                    index = state["pc"] % len(state["bht"])
+                    entry = state["bht"][index]
+                    if entry[0] == state["pc"] and entry[1] > 1:
+                        state["pc"] = entry[2]
+                    else:
+                        state["pc"] = state["pc"] + 1
+
+                    prints("predicted {}".format(state["pc"]))
                 else:
                     prints("stalled, so no change in pc")
 
@@ -331,6 +359,7 @@ class ReorderBuffer(Component):
         self._state["_num_instructions"] = 0
     
         self.add_channel("pc_predictor")
+        self.add_channel("update_predictor")
         self.add_channel("fetch")
         self.add_channel("decode")
         self.add_channel("rat")
@@ -408,6 +437,7 @@ class ReorderBuffer(Component):
             commit_registers = {}
 
             # TODO do this properly
+            update_pcpred = []
             for _ in xrange(self.config["num_commit"]): 
                 if state["size"] > 0:
                     commit_key = state["start"]
@@ -419,6 +449,8 @@ class ReorderBuffer(Component):
                         if commit_entry["dest"] is not None:
                             commit_registers[commit_entry["dest"]] = commit_entry["dest_value"]
 
+                        update_pcpred.append((commit_entry["instruction_pc"],commit_entry["pc_value"]))
+
                         prints("Committed {}".format(commit_key))
 
                         state["start"] = (state["start"] + 1) % self.config["max_size"]
@@ -428,6 +460,7 @@ class ReorderBuffer(Component):
                 else:
                     break
 
+            self.update_predictor.tx = update_pcpred
             self.rf_write.tx = commit_registers
 
 
@@ -977,18 +1010,20 @@ class Processor(object):
 
     def run_until_done(self):
         cycle_count = 0
-        while True:
-            dirty = self.cu.clock(self.components)
-            updated = self.cu.propagate(dirty)
 
-            cycle_count += 1
+        try:
+            while True:
+                dirty = self.cu.clock(self.components)
+                updated = self.cu.propagate(dirty)
 
-            if not updated:
-                break
+                cycle_count += 1
 
-        instruction_count = self.components["rob"]._state_next["_num_instructions"]
-        print "{} instructions committed after {} cycles.".format(instruction_count, cycle_count)
-        print "{:.2f} instructions per cycle".format(float(instruction_count)/cycle_count)
+                if not updated:
+                    break
+        finally:
+            instruction_count = self.components["rob"]._state_next["_num_instructions"]
+            print "{} instructions committed after {} cycles.".format(instruction_count, cycle_count)
+            print "{:.2f} instructions per cycle".format(float(instruction_count)/cycle_count)
 
 
     def step_quiet(self):
@@ -1007,7 +1042,7 @@ class Processor(object):
             assert a.pair is None and b.pair is None
             a.pair, b.pair = b, a
 
-        pc_predictor      = PCPredictor()
+        pc_predictor      = PCPredictor(64)
         instruction_fetch = InstructionFetch(instructions)
         staller           = DirectionalBus()
         decode            = Decoder()
@@ -1030,6 +1065,7 @@ class Processor(object):
         connect(staller.add_dirbus_channel(), rs.stall) 
 
         connect(rob.pc_predictor, pc_predictor.rob)
+        connect(rob.update_predictor, pc_predictor.update_predictor)
         connect(rob.fetch       , instruction_fetch.rob)
         connect(rob.decode      , decode.rob)
         
