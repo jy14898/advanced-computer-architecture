@@ -7,7 +7,8 @@ program = {
         ADDI("R6","R0",2),
         ADDI("R7","R0",3),
         ADDI("R8","R0",4),
-        ADDI("R9","R0",10),
+
+        ADDI("R9","R0",10), # num iterations?
         # START
         MUL("R10","R6","R7"),
         MUL("R10","R10","R8"),
