@@ -1,771 +1,1188 @@
 import functools
 import json
 import traceback
+import itertools
+import copy
 
-from collections import OrderedDict
+from contextlib import contextmanager
 
+from collections import namedtuple
 '''
-Goals...?
+TODO
+    programs/experiments
+      bubble sort in memory
 
-home page is a Program() generator. Creates an ID which then redirects to the processor execution vis
-Program input on webpage (or at least choice of which)
+    experiments:
+        superscalar width
+        rob size
+        rs size
+        num ALU
+        num branch
+        commit rate
+        load/store delay
 
-add bypassing of operand results -> for now i can just tell it actually no its a thing yeah. have a tmux between register file and pipeline stage. decode stage will remember last instruction and detect if operands are dependent and switch the tmux
+    print more information?
+    
 
-this means i need to move the WB stage to an earlier point, otherwise there might be a gap of dependency where it isnt available from exec and it isnt written back yet? or just stall
-also need to deal with case where division might restart -> every stage says whetehr or not outputs actually changed
+Plan:
+  x add a halt op
+        sets a flag in RoB which stops fetching new things
+        eventually it'll be just the HALT instruction left, and nothing will update
 
-1. changed thing? means i'll need to add inputs to things like ALU... do i call it enable? or go or start or execute
-2. hazard detect and stall vs NOOPs - simple way to do it for now is to tell everything whether or not to use the result of the prev instr. how does this work with 2 instructions both of which are deps?
-3. write more test progams
-4. reservation station doesnt sound too hard to do first actually
+  x print out commits/clock
+  x finish branch unit
+  h add load/store
+        Modern machines use Load/store queue. similar to RoB, when decoded add entry, update as we go along, apply once instruction committed in RoB
+        I think data bypass allowed between the queues? ie if you load from an address in the store queue, it's faster
+        for now just do loads and stores in order?
+        have a queue that the LSU loads its things into. Can immediately return if this queue is not full.
+        then later on resolve the loads?
+        
+        we can go even simpler
+        1 load/store unit. only allow 1 load/store instruction in RS at any time. if another tries to come in, stall
+
+  x make branch predictor smarter
+  x multiple fetch/issue
+
+  CHECK SMALL SIZE RS/ROB, LOAD/STORE, maybe update functional version
+  seems to work ok for small size RS/ROB. havent tested LOAD/STORE yet.
+
+    Make JR fire off at issue stage?
+    maybe do exceptions
+    write some programs - got a few now. maybe add a sort and something else?
+
+    GUI? at least output instructions per cycle
+
+      ok. don't predict exceptions
+
+      
+thought experiment we need to think about:
+    RS gets full. stalls decode. decode had a jump but it doesnt send because stall (or does it?). the jump may clear RS and not require stall
 '''
 
+class ChannelEnd(object):
+    def __init__(self, component):
+        self.component = component
+        self.rx_value = None
+        self.tx_value = None
 
-'''
-Group input and outputs into bundles or something, and then map a bundle to a bus
-maybe?
+        self.pair = None
 
+    @property
+    def rx(self):
+        return self.rx_value
 
-NEED TO DECIDE WHETHER TO LEAVE AS IS AND THEN SLAP A 'BUS CONVERTER' THING ON THE SIDE
+    def set_rx(self, value):
+        diff = self.rx_value != value
+        
+        # TODO optimise this
+        if diff:
+            self.rx_value = copy.deepcopy(value)
+        
+        return diff
 
-or have them directly work with bus
+    @property
+    def tx(self):
+        raise AttributeError("tx can't be read")
 
-maybe both
-'''
+    @tx.setter
+    def tx(self, value):
+        self.tx_value = value
 
+    def send(self):
+        v = self.tx_value
+        self.tx_value = None
 
+        return self.pair.set_rx(v)
 
-# -a note someone made here:http://slideplayer.com/slide/9255919/
-# -https://www.cise.ufl.edu/~mssz/CompOrg/Figure5.6-PipelineControlLines.gif
 
 class Component(object):
-    '''
-    TODO: Add some sort of grouping thing for display of keys
-    '''
     def __init__(self):
         self.config = {
-            "input_keys": [],
-            "output_keys": [],
-            "clocked": False
+            "channel_keys": set()
         }
 
-        self.state = {}
+        self._state      = {}
+        self._state_next = {}
 
-    def get_output_values(self, input_values):
-        raise NotImplementedError('Components must override get_output_values()!')
+        self.print_list = []
 
-    def update_state(self, input_values):
-        assert self.config["clocked"] == True
-        raise NotImplementedError('Components must override update_state()!')
+    @contextmanager
+    def Printer(self):
+        # dont really need this whole thing anymore
+        # other than for resetting i guess
 
-    def add_input(self, key):
-        self.config["input_keys"].append(key)
+        self.print_list = []
 
-    def add_output(self, key):
-        self.config["output_keys"].append(key)
+        def prints(s):
+            self.print_list.append(s)
 
-    def enable_clock(self):
-        self.config["clocked"] = True
+        yield prints
 
-class Bus(Component):
+
+    @contextmanager
+    def State(self):
+        state = copy.deepcopy(self._state)
+        yield state
+        self._state_next = state
+    
+    def has_new_state(self):
+        return self._state != self._state_next
+
+    def commit_state(self):
+        self._state = self._state_next
+
+    def update(self):
+        pass
+
+    # NOTE DEPRECIATED
+    def update_state(self):
+        return self.commit_state()
+
+    def add_channel(self, key):
+        self.config["channel_keys"].add(key)
+
+        channel_end = ChannelEnd(self)
+        setattr(self, key, channel_end)
+        return channel_end
+
+class ComponentUpdater(object):
+    def clock(self, components):
+        dirty_components = set(component for component in components.itervalues() if component.has_new_state())
+        
+        for component in dirty_components:
+            component.commit_state()
+
+        return dirty_components
+                
+    def propagate(self, dirty_components):
+        updated_components = set()
+
+        dirty_components = copy.copy(dirty_components)
+        while dirty_components:
+            component = dirty_components.pop()
+            
+            updated_components.add(component)
+            
+            component.update()
+
+            channels = (getattr(component, key) for key in component.config["channel_keys"])
+            
+            affected_components = (channel.pair.component for channel in channels if channel.pair is not None and channel.send())
+
+            dirty_components.update(affected_components)
+
+        return updated_components
+
+class DictBroadcastBus(Component):
     def __init__(self):
-        self.bus_input_counter = 0
+        super(DictBroadcastBus, self).__init__()
 
-    def add_bus_input(self):
-        key = str(self.bus_input_counter)
-        self.add_input(key)
-        self.bus_input_counter += 1
-        return key
+        self.bus_channel_counter = 0
 
-    def get_output_values(self, input_values):
-        return {
-            "out": dict(itertools.chain.from_iterable(iv.iteritems() for iv in input_values.itervalues()))
-        }
+    def add_bus_channel(self):
+        channel_end = self.add_channel("channel_{}".format(self.bus_channel_counter))
+        self.bus_channel_counter += 1
+        return channel_end
 
-class ComponentConnectionOrchestrator(object):
+    def update(self):
+        channel_ends = list(getattr(self,"channel_{}".format(i)) for i in xrange(self.bus_channel_counter))
+
+        dicts = (channel_end.rx for channel_end in channel_ends if isinstance(channel_end.rx, dict))
+        out = dict(itertools.chain.from_iterable(dict_.iteritems() for dict_ in dicts))
+
+        for channel_end in channel_ends:
+            channel_end.tx = out
+
+class DirectionalBus(Component):
     def __init__(self):
-        self.components = []
-        self.connections = [
-            # ((out_component, out_key), (in_component, in_key))
-        ]
+        super(DirectionalBus, self).__init__()
+        
+        self.dirbus_channel_counter = 0
 
-        self.output_value_cache = {
-            # (out_component, out_key) : value
-        }
+    def add_dirbus_channel(self):
+        channel_end = self.add_channel("channel_{}".format(self.dirbus_channel_counter))
+        self.dirbus_channel_counter += 1
+        return channel_end
 
-        self.clock_phase = 0
+    def update(self):
+        for i in xrange(1, self.dirbus_channel_counter):
+            getattr(self, "channel_{}".format(i - 1)).tx = getattr(self, "channel_{}".format(i)).rx
 
-    def add_component(self, component):
-        assert isinstance(component, Component)
-        assert component not in self.components
+class ChannelBuffer(Component):
+    def __init__(self):
+        super(ChannelBuffer, self).__init__()
 
-        self.components.append(component)
+        self.add_channel("A")
+        self.add_channel("B")
 
-        for out_key in component.config["output_keys"]:
-            self.output_value_cache[(component, out_key)] = None
+        self._state["A"] = None
+        self._state["B"] = None
 
-    def add_connection(self, (out_component, out_key), (in_component, in_key)):
-        assert ((out_component, out_key), (in_component, in_key)) not in self.connections
-        assert in_component in self.components
-        assert out_component in self.components
-        assert out_key in out_component.config["output_keys"], "{} {}".format(out_key, out_component)
-        assert in_key in in_component.config["input_keys"]
+    def update(self):
+        with self.State() as state:
+            self.A.tx, self.B.tx = state["B"], state["A"]
+            state["A"], state["B"] = self.B.rx, self.A.rx
+'''
+random joe thought intergection.
 
-        self.connections.append(((out_component, out_key), (in_component, in_key)))
+for the roll-backable efficient dict
+when you access an element, return an object which is a proxy of that element
+have proxy types for dict, list etc. then we can record changes that way
+'''
 
-    def clock(self):
-        self.clock_phase = 1 - self.clock_phase
+class PCPredictor(Component):
+    def __init__(self, bht_size, width):
+        super(PCPredictor, self).__init__()
 
-        for component in (c for c in self.components if c.config["clocked"]):
-            incoming_connections = list(((a,b),(d)) for ((a,b),(c,d)) in self.connections if c == component)
+        self.add_channel("pc")    # this output magically updates by predicting
 
-            input_values = {}
-            for ((out_component,out_key),in_key) in incoming_connections:
-                input_values[in_key] = self.output_value_cache[(out_component,out_key)]
+        self.add_channel("rob")   # this should only be set on a mispredict 
+        self.add_channel("update_predictor") # set this before rob
 
-            input_values["clock"] = self.clock_phase
-            component.update_state(input_values)
+        self.add_channel("stall") # this should be set when a buffer is full somewhere
+        
+        self.config["width"] = width
 
-    def propagate(self, setup=False):
-        # crappy way of doing it but works
-        changed = True
-        while changed:
-            changed = False
-            for component in self.components:
-                incoming_connections = list(((a,b),(d)) for ((a,b),(c,d)) in self.connections if c == component)
+        self._state["pc"] = list(xrange(width))
 
-                input_values = {}
-                for ((out_component,out_key),in_key) in incoming_connections:
-                    input_values[in_key] = self.output_value_cache[(out_component,out_key)]
+        self._state["bht"] = list((0, 0, 0) for _ in xrange(bht_size))
+        #(pc, counter, target)
 
-                input_values["clock"] = self.clock_phase
-                try:
-                    output_values = component.get_output_values(input_values)
-                except (KeyboardInterrupt, SystemExit):
-                    raise
-                except Exception as e:
-                    if setup:
-                        changed = True
-                        # traceback.print_exc()
-                        continue
+    def update(self):
+        with self.State() as state, self.Printer() as prints:
+            prints("set pc.tx to state[\"pc\"]: {}".format(state["pc"]))
+            self.pc.tx = state["pc"]
+
+            if self.update_predictor.rx is not None:
+                for pc, target in self.update_predictor.rx:
+                    index = pc % len(state["bht"])
+                    entry = state["bht"][index]
+                    if entry[0] == pc:
+                        if pc + 1 != target:
+                            state["bht"][index] = (pc, min(max(entry[1] + 1,0),3), target)  
+                        else:
+                            state["bht"][index] = (pc, min(max(entry[1] - 1,0),3), entry[2])  
                     else:
-                        raise
-
-                for out_key in component.config["output_keys"]:
-                    assert out_key in output_values, "{} output missing key {}".format(component, out_key)
-                    assert output_values[out_key] is not None, "{} {}".format(component, out_key)
-
-                    if output_values[out_key] != self.output_value_cache[(component,out_key)]:
-                        changed = True
-
-                    self.output_value_cache[(component,out_key)] = output_values[out_key]
-
-                assert len(component.config["output_keys"]) == len(output_values)
-        return
-
-    def step(self):
-        self.clock()
-        self.propagate()
-        # self.dump_component_outputs()
+                        if pc + 1 != target:
+                            state["bht"][index] = (pc, 2, target)
+                        else:
+                            # use the old target address.
+                            state["bht"][index] = (pc, 1, entry[2]) 
 
 
-    def step_multi(self):
-        i = raw_input("Enter e to stop. Enter nothing and press enter to step 1 phase ")
-        while i != "e":
-            self.step()
-            i = raw_input("Enter e to stop. Enter nothing and press enter to step 1 phase ")
+            # if there's an update to the PC, take it
+            if self.rob.rx is not None:
+                prints("ROB said to change next PC to {}".format(self.rob.rx))
+                pcs = [self.rob.rx]
+                
+                for _ in xrange(1, self.config["width"]):
+                    pcs.append(self.predict_next(state, pcs[-1:][0]))
 
-class Latch(Component):
-    def __init__(self, value, clock_phase):
-        super(Latch, self).__init__()
+                state["pc"] = pcs
 
-        self.add_input("in")
-        self.add_input("freeze")
-
-        self.add_output("out")
-
-        self.enable_clock()
-
-        self.state["value"] = value
-        self.config["clock_phase"] = clock_phase
-
-    def get_output_values(self, input_values):
-        return {
-            "out": self.state["value"]
-        }
-
-    def update_state(self, input_values):
-        if input_values["clock"] == self.config["clock_phase"] and input_values["freeze"] == 0:
-            self.state["value"] = input_values["in"]
-
-class LatchWithReset(Latch):
-    def __init__(self, value, clock_phase):
-        super(LatchWithReset, self).__init__(value, clock_phase)
-
-        self.add_input("reset")
-
-        self.config["reset_value"] = value
-
-    def update_state(self, input_values):
-        if input_values["clock"] == self.config["clock_phase"]:
-            if input_values["reset"] == 0:
-                self.state["value"] = input_values["in"]
-
-        # reset on any phase... not sure if this is good or bad
-        if input_values["reset"] == 1:
-            self.state["value"] = self.config["reset_value"]
-
-class Incrementer(Component):
-    def __init__(self):
-        super(Incrementer, self).__init__()
-
-        self.add_input("in")
-        self.add_output("out")
-
-    def get_output_values(self, input_values):
-        return {
-            "out": input_values["in"] + 1
-        }
-
-
-class Constant(Component):
-    def __init__(self, value):
-        super(Constant, self).__init__()
-
-        self.add_output("out")
-        self.config["value"] = value
-
-    def get_output_values(self, input_values):
-        return {
-            "out": self.config["value"]
-        }
-
-class And(Component):
-    def __init__(self, num_inputs):
-        super(And, self).__init__()
-
-        for i in xrange(num_inputs):
-            self.add_input("input_{}".format(i))
-
-        self.add_output("out")
-
-    def get_output_values(self, input_values):
-        return {
-            "out": 1 if all(input_values[k] for k in self.config["input_keys"]) else 0
-        }
-
-class Or(Component):
-    def __init__(self, num_inputs):
-        super(Or, self).__init__()
-
-        for i in xrange(num_inputs):
-            self.add_input("input_{}".format(i))
-
-        self.add_output("out")
-
-    def get_output_values(self, input_values):
-        return {
-            "out": 1 if any(input_values[k] for k in self.config["input_keys"]) else 0
-        }
-
-class Multiplexer(Component):
-    def __init__(self, num_inputs):
-        super(Multiplexer, self).__init__()
-
-        for i in xrange(num_inputs):
-            self.add_input("input_{}".format(i))
-
-        self.add_input("control")
-        self.add_output("out")
-
-    def get_output_values(self, input_values):
-        return {
-            "out": input_values["input_{}".format(input_values["control"])]
-        }
-
-
-class PipelineBuffer(Component):
-    def __init__(self):
-        super(PipelineBuffer, self).__init__()
-
-        self.config["names"] = OrderedDict()
-
-        self.add_input("reset")
-        self.add_input("freeze")
-
-        self.enable_clock()
-
-    def add_name(self, name, value):
-        assert name not in ["reset","freeze"]
-
-        self.add_input(name)
-        self.add_output(name)
-
-        self.config["names"][name] = {
-            "default": value
-        }
-
-        self.state[name] = value
-
-    def get_output_values(self, input_values):
-        return self.state
-
-    def update_state(self, input_values):
-        if input_values["clock"] == 0 and input_values["freeze"] == 0:
-            for name in self.config["names"].keys():
-                self.state[name] = input_values[name]
-
-        if input_values["reset"] == 1:
-            for name in self.config["names"].keys():
-                self.state[name] = self.config["names"][name]["default"]
-
-class DataMemory(Component):
-    def __init__(self, memory, clock_phase):
-        super(DataMemory, self).__init__()
-
-        self.add_input("write")
-        self.add_input("read")
-        self.add_input("address")
-        self.add_input("write_data")
-
-        self.add_output("read_data")
-        self.enable_clock()
-
-        self.state["memory"] = {}
-
-        for key, value in enumerate(memory):
-            self.state["memory"][key] = value
-
-        self.state["read_data"] = 0
-        self.config["clock_phase"] = clock_phase
-
-    def get_output_values(self, input_values):
-        return {
-            "read_data": self.state["read_data"]
-        }
-
-    def update_state(self, input_values):
-        if input_values["clock"] == self.config["clock_phase"]:
-            assert not (input_values["read"] == 1 and input_values["write"] == 1)
-
-            if input_values["read"] == 1:
-                if input_values["address"] in self.state["memory"]:
-                    self.state["read_data"] = self.state["memory"][input_values["address"]]
+            # predict next
+            else: 
+                if not self.stall.rx:
+                    pcs = [self.predict_next(state,state["pc"][-1:][0])]
+                    for _ in xrange(1, self.config["width"]):
+                        pcs.append(self.predict_next(state, pcs[-1:][0]))
+                    
+                    state["pc"] = pcs
+                    prints("predicted {}".format(state["pc"]))
                 else:
-                    self.state["read_data"] = 0
+                    prints("stalled, so no change in pc")
 
-            if input_values["write"] == 1:
-                self.state["memory"][input_values["address"]] = input_values["write_data"]
+    def predict_next(self, state, pc):
+        index = pc % len(state["bht"])
+        entry = state["bht"][index]
+        if entry[0] == pc and entry[1] > 1:
+            return entry[2]
+        else:
+            return pc + 1
 
-
-'''
-inputs
-    set pc: (true, value)/(false, 0000)
-
-outputs
-    current PC
-    current instruction
-'''
 class InstructionFetch(Component):
-    def __init__(self, instructions):
+    def __init__(self, instructions, width):
         super(InstructionFetch, self).__init__()
 
-        self.add_input("set_pc")
-        self.add_input("freeze")
-        self.add_output("pc")
-        self.add_output("instruction")
+        self.add_channel("pc")
+        self.add_channel("stall")
+        self.add_channel("rob")
 
-        self.enable_clock()
+        self.add_channel("rob_cancel")
+
+        self.add_channel("instruction")
 
         self.config["instructions"] = instructions
+        self.config["width"] = width
 
-        self.state["instruction"] = ("NOOP",0,0,0,0)
-        self.state["pc"]          = 0
+        for i in xrange(width):
+            self._state[i] = { 
+                "pc": None,                                                                                                      
+                "instruction": None,                                                                                             
+                "rob_id": None,                                                                                                  
+            }                                                                                                                 
+                                                                                                                                                                                                 
+        self.default_instruction = ("NOOP",0,0,0,0)                                                                                                                                              
+                                                                                                                                                                                                 
+    def update(self):                                                                                                                                                                            
+        with self.State() as state, self.Printer() as prints:                                                                                                                                    
+            instructions = {}
+            for i in xrange(self.config["width"]):
+                if state[i]["instruction"] is not None:
+                    instructions[i] = {
+                        "instruction": state[i]["instruction"],
+                        "pc": state[i]["pc"],
+                        "pc_add_one": state[i]["pc"] + 1, 
+                        "rob_id": state[i]["rob_id"],
+                    }
 
-    def get_output_values(self, input_values):
-        return {
-            "instruction": self.state["instruction"],
-            "pc": self.state["pc"]
+            self.instruction.tx = instructions
+            
+            prints(self.rob.rx)
+            prints(self.stall.rx)
+            prints(self.pc.rx)
+            if not self.stall.rx and self.rob.rx is not None and len(self.rob.rx) == self.config["width"] and self.pc.rx is not None:
+                rob_reply = {}
+                for i in xrange(self.config["width"]):
+                    try:
+                        instruction = self.config["instructions"][self.pc.rx[i]]
+                    except IndexError:
+                        instruction = self.default_instruction
+
+                    state.update({
+                        i: {
+                            "pc": self.pc.rx[i],
+                            "instruction": instruction,
+                            "rob_id": self.rob.rx[i],
+                        } 
+                    })
+
+                    prints("fetch pc={} complete: {}".format(state[i]["pc"], state[i]["instruction"]))
+
+                    rob_reply[i] =  {
+                        "pc": state[i]["pc"],
+                        "_instruction": state[i]["instruction"],
+                    }
+                self.rob.tx = rob_reply
+            else:
+                self.stall.tx = True
+
+            cancel = self.rob_cancel.rx
+            if cancel is not None and "keys" in cancel:
+                for i in xrange(self.config["width"]):
+                    if state[i]["rob_id"] in cancel["keys"]: 
+                        state[i]["instruction"] = None
+                        prints("Fetched instruction was canceled by RoB. Sending bubble")
+
+
+class ReorderBuffer(Component):
+    record_fields = ["instruction_pc", "dest", "dest_value", "pc_value", "exception_id_value", "exception_pc_value", "_instruction", "type"]
+
+    def __init__(self, max_size, num_commit, width):
+        super(ReorderBuffer, self).__init__()
+        
+        
+        self.config["max_size"] = max_size # 20
+        self.config["num_commit"] = num_commit # 20
+        self.config["width"] = width
+        self._state["buffer"]   = list(dict((f, None) for f in ReorderBuffer.record_fields) for _ in xrange(self.config["max_size"]))
+        self._state["start"]    = 0
+        self._state["size"]     = 0
+        self._state["halt"]     = False
+
+        self._state["_num_instructions"] = 0
+        self._state["_num_flushed"] = 0
+    
+        self.add_channel("pc_predictor")
+        self.add_channel("update_predictor")
+        self.add_channel("fetch")
+        self.add_channel("decode")
+        self.add_channel("rat")
+
+        self.add_channel("rf_write")
+
+        self.add_channel("update_bus")
+
+        self.add_channel("cancel")
+
+
+    # https://classes.cs.uchicago.edu/archive/2016/fall/22200-1/lecture_notes/li-cmsc22200-aut16-lecture9.pdf
+    # https://courses.cs.washington.edu/courses/cse471/07sp/lectures/Lecture4.pdf
+    # slide 4
+    
+    def get_next_free(self, state):
+        return (state["start"] + state["size"]) % self.config["max_size"]
+    
+    def get_naming(self, state):
+        # the oldest reference to the dest is the entry that is assigned to it
+        # TODO eventually i need to 'sub-key' the ROB indicies, so that exceptions can also be renamed?
+
+        mapping = {}
+        for key in self.key_iterator(state):
+            dest = state["buffer"][key]["dest"]
+            if dest is not None:
+                mapping[dest] = key
+
+        return mapping
+
+    def update_entry(self, state, rob_id, update):
+        if rob_id in self.key_iterator(state):
+            entry = state["buffer"][rob_id]
+            entry.update(update)
+            
+            flush = False
+
+            if entry["type"] == "HALT":
+                flush = True
+
+            if entry["pc_value"] is not None:
+                flush = True
+
+                if state["size"] < self.config["max_size"]:
+                    next_id = (rob_id + 1) % self.config["max_size"]
+                    next_id = next_id if next_id in self.key_iterator(state) else None
+                    
+                    if next_id is not None:
+                        next_entry = state["buffer"][next_id]
+                        if next_entry["instruction_pc"] == entry["pc_value"]:
+                            # don't flush if we predicted correctly
+                            flush = False
+
+            if flush:
+                keys = list(self.key_iterator(state))
+                pos  = keys.index(rob_id)
+                flushed_keys = list(k for i, k in enumerate(keys) if i > pos)
+
+                state["_num_flushed"] += len(flushed_keys)
+
+                # make the queue finish at pos
+                state["size"] = pos + 1
+
+                self.cancel.tx = {
+                    "keys": flushed_keys
+                }
+                
+                # update PC
+                # TODO add the pc -> pc_next mapping here so that predictor can learn from it
+                self.pc_predictor.tx = entry["pc_value"]
+                
+                return True
+
+    def update(self):
+        with self.State() as state, self.Printer() as prints:
+            commit_registers = {}
+
+            update_pcpred = []
+            for _ in xrange(self.config["num_commit"]): 
+                if state["size"] > 0:
+                    commit_key = state["start"]
+                    commit_entry = state["buffer"][commit_key]
+                    
+                    if commit_entry["type"] == "halt":
+                        state["halt"] = True
+
+                    # TODO check for exceptions
+                    if commit_entry["pc_value"] is not None and (commit_entry["dest"] is None or commit_entry["dest_value"] is not None):
+                        # TODO remove assumption that they're RF destinations
+                        if commit_entry["dest"] is not None:
+                            commit_registers[commit_entry["dest"]] = commit_entry["dest_value"]
+
+                        update_pcpred.append((commit_entry["instruction_pc"],commit_entry["pc_value"]))
+
+                        prints("Committed {}".format(commit_key))
+
+                        state["start"] = (state["start"] + 1) % self.config["max_size"]
+                        state["size"] -= 1
+
+                        state["_num_instructions"] += 1
+                else:
+                    break
+
+            self.update_predictor.tx = update_pcpred
+            self.rf_write.tx = commit_registers
+
+            
+            if state["size"] + self.config["width"] >= self.config["max_size"] or state["halt"]:
+                self.fetch.tx = []
+            else:
+                ids = []
+                for i in xrange(self.config["width"]):
+                    ids.append((state["start"] + state["size"] + i) % self.config["max_size"])
+                self.fetch.tx = ids
+        
+            if self.fetch.rx is not None and not state["halt"]:
+                for i in xrange(self.config["width"]):
+                    rob_id = self.get_next_free(state)
+                    entry = state["buffer"][rob_id]
+
+                    for key in entry:
+                        entry[key] = None
+                        
+                    entry["instruction_pc"] = self.fetch.rx[i]["pc"]
+                    entry["_instruction"]   = self.fetch.rx[i]["_instruction"]
+                    
+                    state["size"] += 1
+            
+            updates = {}
+            if self.decode.rx is not None:
+                for i in xrange(self.config["width"]):
+                    if i in self.decode.rx:
+                        rob_id = self.decode.rx[i]["rob_id"]
+                        update = ((k,v) for k, v in self.decode.rx[i].iteritems() if k in ReorderBuffer.record_fields)
+                        updates[rob_id] = update
+
+            if self.update_bus.rx is not None:
+                for rob_id, unfiltered_update in self.update_bus.rx.iteritems():
+                    update = ((k,v) for k, v in unfiltered_update.iteritems() if k in ReorderBuffer.record_fields)
+                    updates[rob_id] = update
+
+            for key in self.key_iterator(state):
+                if key in updates:
+                    flushed = self.update_entry(state, key, updates[key])
+
+                    # if we flushed, then the later entries don't exist anymore
+                    if flushed:
+                        break
+
+            if self.rat.rx is not None:
+                reply = {}
+
+                # dict keyed by rob. then inside dict is list of keys
+                # that's a lie now. now it's just None
+                for rob_id, _ in self.rat.rx.iteritems():
+                    subreply = reply[rob_id] = {}
+                    keys = list(self.key_iterator(state))
+
+                    if rob_id in keys:
+                        prev_keys = keys[0:keys.index(rob_id)]
+
+                        for key in prev_keys:
+                            dest = state["buffer"][key]["dest"]
+                            if dest is not None:
+                                # give it both the renaming and the current value
+                                subreply[dest] = (key, state["buffer"][key]["dest_value"])
+
+                self.rat.tx = reply
+
+            for k in self.key_iterator(state):
+                entry = state["buffer"][k]
+                prints("{}: pc={} dest={} value={} pc_next={}".format(k, entry["instruction_pc"], entry["dest"], entry["dest_value"], entry["pc_value"]))
+
+            prints("Register renaming:")
+            for k,v in self.get_naming(state).iteritems():
+                prints("  R{}: {}".format(k, "RoB{}".format(v)))
+
+    def key_iterator(self, state):
+        return ((state["start"] + i ) % self.config["max_size"] for i in xrange(state["size"]))
+
+reg_prefix = 0
+rob_prefix = 1
+class Decoder(Component):
+    def __init__(self, width):
+        super(Decoder, self).__init__()
+
+        self.add_channel("instruction")
+        self.add_channel("decoded_instruction")
+
+        self.add_channel("rob")
+
+        self.add_channel("rob_cancel")
+        self.config["width"] = width
+
+    def update(self):
+        decoded = {}
+        rob     = {}
+
+        if self.instruction.rx is not None:
+            for i in xrange(self.config["width"]):
+                if i not in self.instruction.rx:
+                    continue
+
+                instruction = self.instruction.rx[i]["instruction"]
+                pc          = self.instruction.rx[i]["pc"]
+                pc_add_one  = self.instruction.rx[i]["pc_add_one"]
+                rob_id      = self.instruction.rx[i]["rob_id"]
+
+                opcode, reg_read_sel1, reg_read_sel2, reg_write_sel, immediate = instruction
+                
+                EU = None
+
+                if opcode in ["ADD","SUB","DIV","MUL","AND","OR" ,"XOR", "ADDI","SUBI","DIVI","MULI","ANDI","ORI","XORI"]:
+                    is_immediate = opcode[-1:] == 'I'
+
+                    EU = "ALU"
+                    EU_control = {
+                        "op": opcode[:-1] if is_immediate else opcode
+                    }
+
+                    # for simplicity b is always immediate if it is there. this has implicitions for div. 
+                    EU_data = {
+                        "a": ((reg_prefix, reg_read_sel1), None),
+                        "b": ((reg_prefix, reg_read_sel2), None) if not is_immediate else (None, immediate),
+                        "pc_add_one": (None, pc_add_one),
+                    }
+
+                    EU_write_reg = reg_write_sel
+
+                elif opcode in ["BEQ","BNE", "BGEZ", "BGTZ", "BLEZ", "BLTZ"]:
+                    EU = "BRU"
+                    EU_control = {
+                        "op": opcode[1:],
+                    }
+
+                    EU_data = {
+                        "a": ((reg_prefix, reg_read_sel1), None),
+                        "pc_true": (None, immediate),
+                        "pc_false": (None, pc_add_one),
+                    }
+
+                    if opcode in ["BEQ", "BNE"]:
+                        EU_data["b"] = ((reg_prefix, reg_read_sel2), None)
+                    
+                    EU_write_reg = None 
+
+                elif opcode in ["J"]:
+                    rob[i] = {
+                        "rob_id": rob_id,
+                        "pc_value": immediate
+                    }
+
+                elif opcode in ["NOOP"]:
+                    rob[i] = {
+                        "rob_id": rob_id,
+                        "pc_value": pc_add_one
+                    }
+
+                elif opcode in ["JR"]:
+                    EU = "BR"
+                    EU_control = {"op":"TRUE"}
+                    EU_data = {
+                        "pc_true": ((reg_prefix, reg_read_sel1), None),
+                    }
+
+                    EU_write_reg = None
+
+                elif opcode in ["HALT"]:
+                    rob[i] = {
+                        "rob_id": rob_id,
+                        "type": "HALT",
+                    }
+
+                elif opcode in ["LOAD", "STOR"]:
+                    EU = "LSU"
+                    EU_control = { "op": opcode, }
+                    EU_data = {
+                        "addr_a": (None, immediate),
+                        "addr_b": ((reg_prefix, reg_read_sel1), None),
+                        "pc_add_one": (None, pc_add_one),
+                    }
+
+                    if opcode in ["STOR"]:
+                        EU_data["data"] = ((reg_prefix, reg_read_sel2), None)
+                        EU_write_reg = None
+
+                    if opcode in ["LOAD"]:
+                        EU_write_reg = reg_write_sel
+
+                if EU is not None:
+                    cancel = self.rob_cancel.rx
+                    if cancel is None or "keys" not in cancel or rob_id not in cancel["keys"]: 
+                        decoded[i] = {
+                            "rob_id": rob_id,
+                            "pc": pc,
+                            "EU": EU,
+                            "EU_control": EU_control,
+                            "EU_data": EU_data,
+                        }
+                        
+                        rob[i] = {
+                            "rob_id": rob_id,
+                            "dest": EU_write_reg, # TODO support other types of dests?
+                        }
+        
+        self.decoded_instruction.tx = decoded
+        self.rob.tx = rob
+
+class InstructionRegisterLoader(Component):
+    def __init__(self, width):
+        super(InstructionRegisterLoader, self).__init__()
+
+        self.add_channel("rat")
+        self.add_channel("rf_read")
+
+        self.add_channel("ins_in")
+        self.add_channel("ins_out")
+
+        self.config["width"] = width
+
+    def update(self):
+        with self.Printer() as prints:
+            ins_out = {}
+
+            if self.ins_in.rx is not None:
+                rob_ids = {}
+                for i in xrange(self.config["width"]):
+                    if i not in self.ins_in.rx:
+                        continue
+                    
+                    rob_id = self.ins_in.rx[i]["rob_id"]
+                    rob_ids[rob_id] = None
+
+                self.rat.tx = rob_ids
+                mapping = self.rat.rx
+
+                for i in xrange(self.config["width"]):
+                    if i not in self.ins_in.rx:
+                        continue
+
+                    rob_id = self.ins_in.rx[i]["rob_id"]
+                    if mapping is not None and rob_id in mapping:
+                        renames = mapping[rob_id]
+
+                        # i shouldnt actualy have to deep copy, but i dont trust my logic elsewhere
+                        instruction = copy.deepcopy(self.ins_in.rx[i])
+
+                        prints(instruction["EU_data"])
+                        for k, (source, value) in instruction["EU_data"].iteritems():
+                            if source is not None and source[0] == reg_prefix:
+                                if source[1] in renames:
+                                    renamed = renames[source[1]]
+                                    instruction["EU_data"][k] = (renamed[0], renamed[1])
+                                else:
+                                    instruction["EU_data"][k] = (None, self.rf_read.rx[source[1]])
+
+                        ins_out[i] = instruction
+                
+                self.ins_out.tx = ins_out
+
+class ReservationStation(Component):
+    def __init__(self, num_slots, width):
+        super(ReservationStation, self).__init__()
+
+        self.add_channel("instruction")
+        self.add_channel("stall")
+        
+        self.add_channel("rob_cancel")  # RoB cancel (read only)
+        self.add_channel("results") # Results from EUs (read only?)
+
+        # define the semantics to be if named, registers (or rob entries) will either always be written to or instruction get flushed 
+        
+        # make these config?
+        self.eu_counter = 0
+        self.eu_channels = {}
+
+        self.config["num_slots"] = num_slots
+        self.config["width"] = width
+
+        self._state = {
+            "slots": [],
+            "inputs_done": list(True for i in xrange(width)),
         }
 
-    def update_state(self, input_values):
-        if input_values["freeze"]:
-            return
+    def add_eu(self, eu_type):
+        key = "eu_{}_{}".format(eu_type, self.eu_counter)
+        channel_end = self.add_channel(key)
 
-        if input_values["clock"] == 0:
-            if input_values["set_pc_en"]:
-                self.state["pc"] = input_values["set_pc_val"]
-            else:
-                self.state["pc"] = self.state["pc"] + 1
+        if eu_type in self.eu_channels:
+            self.eu_channels[eu_type].append(channel_end)
+        else:
+            self.eu_channels[eu_type] = [channel_end]
 
-        if input_values["clock"] == 1:
-            self.state["instruction"] = self.config["instructions"][self.state["pc"]]
+        self.eu_counter += 1
+
+        return channel_end
+
+    def update(self):
+        with self.State() as state, self.Printer() as prints:
+            cancel = self.rob_cancel.rx
+            if cancel is not None and "keys" in cancel:
+                state["slots"][:] = list(slot for slot in state["slots"] if slot["rob_id"] not in cancel["keys"])
+            
+            if self.instruction.rx is not None:
+                if all(state["inputs_done"]):
+                    state["inputs_done"] = list(False for _ in xrange(self.config["width"]))
+
+                for i,is_done in enumerate(state["inputs_done"]):
+                    if not is_done:
+                        if i in self.instruction.rx and self.instruction.rx[i]["rob_id"] not in (s["rob_id"] for s in state["slots"]):
+                            # check if it's LOAD/STORE, if we have one pls stall
+                            # simplification to keep load/stores in order
+                            lsu_stall = self.instruction.rx[i]["EU"] == "LSU" and any(slot["EU"] == "LSU" for slot in state["slots"])
+
+                            if len(state["slots"]) < self.config["num_slots"] and not lsu_stall:
+                                state["slots"].append(self.instruction.rx[i])
+                                state["inputs_done"][i] = True
+                        else: 
+                            state["inputs_done"][i] = True
+
+                if not all(state["inputs_done"]):
+                    self.stall.tx = True
+
+            if self.results.rx is not None:
+                # iterate along all slots and fill in
+                for slot in state["slots"]:
+                    for key, (source, value) in slot["EU_data"].iteritems():
+                        if source is not None:
+                            if source in self.results.rx:
+                                slot["EU_data"][key] = (source, self.results.rx[source]["dest_value"])
+                        else:
+                            # we should never need to update rf or immediates
+                            pass
+
+            # get ready slot keys into a form matching eu_channels
+            ready_slot_keys = dict((k, []) for k in self.eu_channels)
+            for key, slot in enumerate(state["slots"]):
+                if all(value is not None for _, value in slot["EU_data"].itervalues()):
+                    if slot["EU"] in ready_slot_keys:
+                        ready_slot_keys[slot["EU"]].append(key)
+
+            # map eus to slots
+            dispatched_slot_keys = []
+            for eu_type, eu_channels in self.eu_channels.iteritems():
+                free_eus = list(ec for ec in eu_channels if ec.rx) # ec.rx == True when it's not busy
+                
+                for eu_channel, slot_key in zip(free_eus, ready_slot_keys[eu_type]):
+                    slot = state["slots"][slot_key]
+                    eu_channel.tx = {
+                        "control": slot["EU_control"],
+                        "data": dict((key, value) for key, (_, value) in slot["EU_data"].iteritems()),
+                        "dest": slot["rob_id"],
+                    }
+                    dispatched_slot_keys.append(slot_key)
+
+            state["slots"][:] = (v for k,v in enumerate(state["slots"]) if k not in dispatched_slot_keys)
+
+            for v in state["slots"]:
+                tick  = u'\u2713'
+                cross = u'\u2717'
+                data  = u", ".join(cross if val is None else tick for _, val in v["EU_data"].itervalues())
+                prints(u"rob_id={} EU={} data={}".format(v["rob_id"],v["EU"],data))
 
 class RegisterFile(Component):
-    def __init__(self, num_registers, num_reads):
+    def __init__(self, num_registers):
         super(RegisterFile, self).__init__()
 
-        self.state["registers"] = list(0 for i in xrange(num_registers))
+        self.add_channel("set")
+        self.add_channel("get")
+    
+        self._state["registers"] = list(0 for i in xrange(num_registers))
 
-        self.add_input("write_sel")
-        self.add_input("write_enable")
-        self.add_input("write_data")
+    def update(self):
+        with self.State() as state:
+            if self.set.rx is not None:
+                for r, v in self.set.rx.iteritems():
+                    if r == 0:
+                        raise "DONT WRITE TO R0!"
+                    
+                    state["registers"][r] = v
 
-        for i in xrange(num_reads):
-            self.add_input("read_sel{}".format(i))
-            self.add_output("read_data{}".format(i))
+            self.get.tx = dict(enumerate(state["registers"]))
 
-        self.config["num_reads"] = num_reads
+class LSU(Component):
+    def __init__(self, data):
+        super(LSU, self).__init__()
 
-        self.enable_clock()
+        self.add_channel("dispatcher")
+        self.add_channel("result")
 
-    def get_state(self):
-        state = super(RegisterFile, self).get_state()
-        state["registers"] = self.state["registers"]
-        return state
+        self.add_channel("rob_cancel")
 
-    def get_output_values(self, input_values):
-        # i think we are supposed to store which register to read from in ph0
-        return dict(("read_data{}".format(i), self.state["registers"][input_values["read_sel{}".format(i)]]) for i in xrange(self.config["num_reads"]))
+        self._state["cycles_left"] = 0
+        self._state["current_op"] = None
 
-    def update_state(self, input_values):
-        if input_values["clock"] == 0:
-            if input_values["write_enable"] == 1:
-                # disallow writing to R0
-                assert input_values["write_sel"] != 0, "Cannot change R0's value"
+        # TODO should really make this a dict
+        self._state["memory"] = copy.deepcopy(data)
 
-                self.state["registers"][input_values["write_sel"]] = input_values["write_data"]
+    def update(self):
+        with self.Printer() as prints, self.State() as state:
+            cancel = self.rob_cancel.rx
+            if state["current_op"] is not None and cancel is not None \
+                    and "keys" in cancel and state["current_op"]["dest"] in cancel["keys"]: 
+                state["cycles_left"] = 0
+                state["current_op"]  = None
+                prints("Current OP was canceled by RoB")
+
+            if state["cycles_left"] > 0:
+                state["cycles_left"] -= 1
+
+            if state["cycles_left"] == 0 and state["current_op"] is not None:
+                op = state["current_op"]
+                if op["control"]["op"] == "LOAD":
+                    prints(op["data"])
+                    self.result.tx = {
+                        op["dest"]: {
+                            "pc_value": op["data"]["pc_add_one"],
+                            "dest_value": state["memory"][op["data"]["addr_a"] + op["data"]["addr_b"]],
+                        }
+                    }
+                else:
+                    state["memory"][op["data"]["addr_a"] + op["data"]["addr_b"]] = op["data"]["data"]
+                    self.result.tx = {
+                        op["dest"]: {
+                            "pc_value": op["data"]["pc_add_one"],
+                        }
+                    }
+
+                state["current_op"] = None
+            
+            if state["current_op"] is None:
+                self.dispatcher.tx = True
+
+            op = self.dispatcher.rx
+            prints("Recieved {}".format(op))
+
+            if op is not None and state["current_op"] is None:
+                state["current_op"] = op
+                state["cycles_left"] = 6 if op["control"]["op"] == "LOAD" else 1
+
+            prints("Currently executing {}".format(state["current_op"]))
+
+
+class BRU(Component):
+    def __init__(self):
+        super(BRU, self).__init__()
+
+        self.add_channel("dispatcher")
+        self.add_channel("result")
+
+        self.add_channel("rob_cancel")
+
+        self._state["current_op"] = None
+
+    ops = {
+        "EQ":   lambda ins: True if ins["a"] == ins["b"] else False,
+        "NE":   lambda ins: True if ins["a"] != ins["b"] else False,
+        "GEZ":  lambda ins: True if ins["a"] >= 0 else False,
+        "GTZ":  lambda ins: True if ins["a"] >  0 else False,
+        "LEZ":  lambda ins: True if ins["a"] <= 0 else False,
+        "LTZ":  lambda ins: True if ins["a"] <  0 else False,
+        "TRUE": lambda _: True
+    }
+
+    def update(self):
+        with self.Printer() as prints, self.State() as state:
+            cancel = self.rob_cancel.rx
+            if state["current_op"] is not None and cancel is not None \
+                    and "keys" in cancel and state["current_op"]["dest"] in cancel["keys"]: 
+                state["current_op"]  = None
+                prints("Current OP was canceled by RoB")
+
+            if state["current_op"] is not None:
+                op = state["current_op"]
+                self.result.tx = {
+                    op["dest"]: {
+                        "pc_value": op["data"]["pc_true"] if BRU.ops[op["control"]["op"]](op["data"]) else op["data"]["pc_false"],
+                    }
+                }
+                state["current_op"] = None
+            
+            if state["current_op"] is None:
+                self.dispatcher.tx = True
+
+            op = self.dispatcher.rx
+            prints("Recieved {}".format(op))
+
+            if op is not None and state["current_op"] is None:
+                state["current_op"] = op
+
+            prints("Currently executing {}".format(state["current_op"]))
 
 class ALU(Component):
+    operations = {
+        "ADD":  (1,lambda ins: ins["a"] + ins["b"]),
+        "SUB":  (1,lambda ins: ins["a"] - ins["b"]),
+        "DIV":  (5,lambda ins: 0 if ins["b"] == 0 else ins["a"] // ins["b"]),
+        "MUL":  (5,lambda ins: ins["a"] * ins["b"]),
+        "AND":  (1,lambda ins: ins["a"] & ins["b"]),
+        "OR":   (1,lambda ins: ins["a"] | ins["b"]),
+        "XOR":  (1,lambda ins: ins["a"] ^ ins["b"]),
+    }
+
     def __init__(self):
         super(ALU, self).__init__()
 
-        self.add_input("operand_a")
-        self.add_input("operand_b")
-        self.add_input("operation")
-
-        # my ALU will only have 1 output instead of 1 for status and one for result
-        self.add_output("out")
-
-        self.add_output("busy")
-        self.cycles_left = 0
-
-        self.enable_clock()
-
-    def get_state(self):
-        state = super(ALU, self).get_state()
-        state["cycles_left"] = self.cycles_left
-        return state
-
-    operations = {
-        "ADD": lambda ins: ins[0] + ins[1],
-        "SUB": lambda ins: ins[0] - ins[1],
-        "DIV": lambda ins: 0 if ins[1] == 0 else ins[0] / ins[1], # really this should be raised on ph1?
-        "MUL": lambda ins: ins[0] * ins[1],
-        "AND": lambda ins: ins[0] & ins[1],
-        "OR": lambda ins: ins[0] | ins[1],
-        "XOR": lambda ins: ins[0] ^ ins[1],
-        "EQ": lambda ins: 1 if ins[0] == ins[1] else 0,
-        "NE": lambda ins: 1 if ins[0] != ins[1] else 0,
-        "GEZ": lambda ins: 1 if ins[0] >= 0 else 0,
-        "GTZ": lambda ins: 1 if ins[0] >  0 else 0,
-        "LEZ": lambda ins: 1 if ins[0] <= 0 else 0,
-        "LTZ": lambda ins: 1 if ins[0] <  0 else 0,
-        "TRUE": lambda _: 1
-    }
-
-    operation_delay = {
-        "ADD": 0,
-        "SUB": 0,
-        "DIV": 5,
-        "MUL": 5,
-        "AND": 0,
-        "OR": 0,
-        "XOR": 0,
-        "EQ": 0,
-        "NE": 0,
-        "GEZ": 0,
-        "GTZ": 0,
-        "LEZ": 0,
-        "LTZ": 0,
-        "TRUE": 0,
-    }
-
-    @staticmethod
-    def compute(inputs, operation):
-        return ALU.operations[operation](inputs)
-
-    def get_output_values(self, input_values):
-        return {
-            "busy": 1 if self.cycles_left > 0 else 0,
-            "out": 0 if self.cycles_left > 0 else ALU.compute((input_values["operand_a"], input_values["operand_b"]), input_values["operation"])
-        }
-
-    # need some sort of busy tag to say to ourselves and others
-    # need to let values pass through first, also depending on the operation/status of the operation set the busy flag to true -> keeps divisor same because input latches dont change
-
-    def update_state(self, input_values):
-        # on ph1
-        if input_values["clock"] == 1:
-            if self.cycles_left == 0:
-                self.cycles_left = self.operation_delay[input_values["operation"]]
-            else:
-                self.cycles_left -= 1
-
-
-class Decoder(Component):
-    @staticmethod
-    def get_alu_op(opcode):
-        # NOTE this only works because none of them begin with B or end with I
-        if opcode[-1:] == "I":
-            return opcode[:-1]
-        if opcode[:1]  == "B":
-            return opcode[1:]
-
-        return opcode
-
-    def __init__(self):
-        super(Decoder, self).__init__()
-
-        self.add_input("opcode")
-
-        self.add_output("alu_op")
-        self.add_output("alu_source") # 0 = read_sel2 1 = immediate
-
-        self.add_output("wb_enable")
-        self.add_output("wb_exec_or_mem")
-
-        self.add_output("is_branch")
-        self.add_output("branch_imm_or_reg")
-
-        self.add_output("mem_write")
-        self.add_output("mem_read")
-
-    def get_output_values(self, input_values):
-        opcode = input_values["opcode"]
+        self.add_channel("dispatcher")
+        self.add_channel("result")
+
+        self.add_channel("rob_cancel")
+
+        self._state["cycles_left"] = 0
+        self._state["current_op"] = None
+
+    def update(self):
+        with self.Printer() as prints, self.State() as state:
+            cancel = self.rob_cancel.rx
+            if state["current_op"] is not None and cancel is not None \
+                    and "keys" in cancel and state["current_op"]["dest"] in cancel["keys"]: 
+                state["cycles_left"] = 0
+                state["current_op"]  = None
+                prints("Current OP was canceled by RoB")
+
+            if state["cycles_left"] > 0:
+                state["cycles_left"] -= 1
+
+            if state["cycles_left"] == 0 and state["current_op"] is not None:
+                op = state["current_op"]
+                self.result.tx = {
+                    op["dest"]: {
+                        "pc_value": op["data"]["pc_add_one"],
+                        "dest_value": ALU.operations[op["control"]["op"]][1](op["data"]),
+                    }
+                }
+                state["current_op"] = None
+            
+            if state["current_op"] is None:
+                self.dispatcher.tx = True
+
+            op = self.dispatcher.rx
+            prints("Recieved {}".format(op))
+
+            if op is not None and state["current_op"] is None:
+                state["current_op"] = op
+                state["cycles_left"] = ALU.operations[op["control"]["op"]][0]
+
+            prints("Currently executing {}".format(state["current_op"]))
+
+class Processor(object):
+    def __init__(self, instructions, data, issue_width=4):
+        self.cu = ComponentUpdater()
+        
+        self.issue_width = issue_width
+        self.setup_components(instructions, data)
+
+        try:
+            u = self.cu.propagate(set(self.components.itervalues())) 
+            self.output(u)
+        except:
+            self.output(set(self.components.itervalues()))
+            raise
+
+    def step(self):
+        dirty = self.cu.clock(self.components)
+        try:
+            updated = self.cu.propagate(dirty)
+            self.output(updated)
+        except:
+            self.output(set(self.components.itervalues()))
+            raise
+
+    def run_until_done(self, max_cycles=None):
+        print "Memory:"
+        print self.components["lsu"]._state_next["memory"]
+
+        cycle_count = 0
+
+        try:
+            while True:
+                dirty = self.cu.clock(self.components)
+                updated = self.cu.propagate(dirty)
+
+                cycle_count += 1
+
+                if max_cycles is not None and cycle_count > max_cycles:
+                    break
+
+                if not updated:
+                    break
+        except:
+            self.output(set(self.components.itervalues()))
+            raise
+        finally:
+            instruction_count = self.components["rob"]._state_next["_num_instructions"]
+            flush_count = self.components["rob"]._state_next["_num_flushed"]
+
+            print "Registers:"
+            print self.components["register_file"]._state_next["registers"]
+            print "Memory:"
+            print self.components["lsu"]._state_next["memory"]
+            print "{} instructions committed after {} cycles.".format(instruction_count, cycle_count)
+            print "{} instructions flushed after being incorrectly fetched.".format(flush_count)
+            print "{:.2f} instructions per cycle".format(float(instruction_count)/cycle_count)
+
+
+    def step_quiet(self):
+        dirty = self.cu.clock(self.components)
+        updated = self.cu.propagate(dirty)
+
+    def output(self, updated):
+        for component_name, component in self.components.iteritems():
+            if component in updated:
+                print "{} updated".format(component_name)
+                for s in component.print_list:
+                    print u"    {}".format(s)
+
+    def setup_components(self, instructions, data):
+        def connect(a, b):
+            assert a.pair is None and b.pair is None
+            a.pair, b.pair = b, a
+        
+        issue_width = self.issue_width
+        pc_predictor      = PCPredictor(64, issue_width)
+        instruction_fetch = InstructionFetch(instructions, issue_width)
+        staller           = DirectionalBus()
+        decode            = Decoder(issue_width)
+        irl               = InstructionRegisterLoader(issue_width)
+        register_file     = RegisterFile(16)
+        
+        rs = ReservationStation(16, issue_width)
+
+        alus              = list(ALU() for _ in xrange(4))
+        brus              = list(BRU() for _ in xrange(1))
+        lsu               = LSU(data) 
+        
+        rob               = ReorderBuffer(128, 4, issue_width)
+        rob_cancel_bus    = DictBroadcastBus()
+
+        results_bus       = DictBroadcastBus()
+
+        connect(staller.add_dirbus_channel(), pc_predictor.stall) 
+        connect(staller.add_dirbus_channel(), instruction_fetch.stall) 
+        connect(staller.add_dirbus_channel(), rs.stall) 
+
+        connect(rob.pc_predictor, pc_predictor.rob)
+        connect(rob.update_predictor, pc_predictor.update_predictor)
+        connect(rob.fetch       , instruction_fetch.rob)
+        connect(rob.decode      , decode.rob)
+        
+        connect(rob_cancel_bus.add_bus_channel(), rob.cancel)
+        connect(rob_cancel_bus.add_bus_channel(), instruction_fetch.rob_cancel)
+        connect(rob_cancel_bus.add_bus_channel(), decode.rob_cancel)
+        connect(rob_cancel_bus.add_bus_channel(), rs.rob_cancel)
+
+        for alu in alus:
+            connect(rob_cancel_bus.add_bus_channel(), alu.rob_cancel)
+            connect(rs.add_eu("ALU"), alu.dispatcher)
+            connect(results_bus.add_bus_channel(), alu.result)
+        alu = None
+
+        for bru in brus:
+            connect(rob_cancel_bus.add_bus_channel(), bru.rob_cancel)
+            connect(rs.add_eu("BRU"), bru.dispatcher)
+            connect(results_bus.add_bus_channel(), bru.result)
+        bru = None
+
+        connect(rob_cancel_bus.add_bus_channel(), lsu.rob_cancel)
+        connect(rs.add_eu("LSU"), lsu.dispatcher)
+        connect(results_bus.add_bus_channel(), lsu.result)
+
+        connect(irl.rat, rob.rat)
+
+        connect(irl.rf_read , register_file.get)
+        connect(rob.rf_write, register_file.set)
+
+        connect(pc_predictor.pc, instruction_fetch.pc)
+        connect(instruction_fetch.instruction, decode.instruction)
+        connect(decode.decoded_instruction, irl.ins_in)
+        connect(rs.instruction, irl.ins_out)
+        
+
+        connect(results_bus.add_bus_channel(), rob.update_bus)
+        connect(results_bus.add_bus_channel(), rs.results)
+
+
+        # nice and hacky
+        self.components = dict(i for i in locals().iteritems() if isinstance(i[1],Component))
+        self.components.update(("alu_{}".format(i),alu) for i,alu in enumerate(alus))
+        self.components.update(("bru_{}".format(i),bru) for i,bru in enumerate(brus))
 
-        output_values = {
-            "wb_enable": 0,
-            "wb_exec_or_mem": 0,
-            "alu_op": "ADD",
-            "alu_source": 0,
-            "is_branch": 0,
-            "branch_imm_or_reg": 0,
-            "mem_write": 0,
-            "mem_read":  0
-        }
-
-        if  opcode in ["ADD","SUB","DIV","MUL","AND","OR" ,"XOR"]:
-            output_values["wb_enable"]  = 1
-
-            output_values["alu_op"]     = Decoder.get_alu_op(opcode)
-
-        elif opcode in ["ADDI","SUBI","DIVI","MULI","ANDI","ORI","XORI"]:
-            output_values["wb_enable"]  = 1
-
-            output_values["alu_op"]     = Decoder.get_alu_op(opcode)
-            output_values["alu_source"] = 1
-
-        elif opcode in ["BEQ","BNE"]:
-            output_values["alu_op"]    = Decoder.get_alu_op(opcode)
-
-            output_values["is_branch"] = 1
-
-        elif opcode in ["BGEZ","BGTZ","BLEZ","BLTZ"]:
-            output_values["alu_op"]    = Decoder.get_alu_op(opcode)
-
-            output_values["is_branch"] = 1
-
-        elif opcode in ["J"]:
-            output_values["alu_op"]    = "TRUE"
-
-            output_values["is_branch"] = 1
-
-        elif opcode in ["JR"]:
-            output_values["alu_op"]    = "TRUE"
-
-            output_values["is_branch"] = 1
-            output_values["branch_imm_or_reg"] = 1
-
-        elif opcode in ["LOAD"]:
-            output_values["wb_enable"]      = 1
-            output_values["wb_exec_or_mem"] = 1
-
-            output_values["alu_op"]     = "ADD"
-            output_values["alu_source"] = 1
-
-            output_values["mem_read"]  = 1
-
-        elif opcode in ["STOR"]:
-            output_values["alu_op"]     = "ADD"
-            output_values["alu_source"] = 1
-
-            output_values["mem_write"] = 1
-
-        return output_values
-
-class Processor(ComponentConnectionOrchestrator):
-    def __getitem__(self, key):
-        return self.object_lookup[key]
-
-    def get_name(self, component):
-        return self.name_lookup[component]
-
-    def __setitem__(self, key, value):
-        self.object_lookup[key] = value
-        self.name_lookup[value] = key
-
-    def components_setup_complete(self):
-        for name, component in self.object_lookup.iteritems():
-            self.add_component(component)
-
-    def add_connection(self, (out_name, out_key), (in_name, in_key)):
-        out_component = self[out_name]
-        in_component  = self[in_name]
-        super(Processor, self).add_connection((out_component, out_key), (in_component, in_key))
-
-    def __init__(self, instructions, data):
-        super(Processor, self).__init__()
-
-        self.object_lookup = {}
-        self.name_lookup = {}
-
-        p = self
-        p["instruction_fetch"] = InstructionFetch(instructions)
-
-        p["decode_buffer"] = PipelineBuffer()
-        p["decode_buffer"].add_name("instruction_opcode", "NOOP")
-        p["decode_buffer"].add_name("instruction_reg_read_sel1", 0)
-        p["decode_buffer"].add_name("instruction_reg_read_sel2", 0)
-        p["decode_buffer"].add_name("instruction_reg_write_sel", 0)
-        p["decode_buffer"].add_name("instruction_immediate",     0)
-
-        p["decoder"] = Decoder()
-        p["register_file"] = RegisterFile(32, 2)
-
-        p["execute_buffer_reset"] = Constant(0)
-        p["execute_buffer"] = PipelineBuffer()
-        p["execute_buffer"].add_name("reg_write_sel", 0)
-        p["execute_buffer"].add_name("immediate", 0)
-
-        for out_key in ["alu_op", "alu_source", "wb_enable", "wb_exec_or_mem", "is_branch", "branch_imm_or_reg", "mem_write", "mem_read"]:
-            p["execute_buffer"].add_name(out_key, "ADD" if out_key == "alu_op" else 0)
-
-        for out_key in ["read_data0","read_data1"]:
-            p["execute_buffer"].add_name(out_key, 0)
-
-        p["alu"] = ALU()
-        p["alu_source_mux"] = Multiplexer(2)
-
-        p["branch_addr_mux"] = Multiplexer(2)
-        p["do_branch"] = And(2)
-
-        p["mem_buffer_reset"] = Constant(0)
-        p["mem_buffer"] = PipelineBuffer()
-        p["mem_buffer"].add_name("reg_write_sel", 0)
-        p["mem_buffer"].add_name("mem_write", 0)
-        p["mem_buffer"].add_name("mem_read", 0)
-        p["mem_buffer"].add_name("wb_enable", 0)
-        p["mem_buffer"].add_name("wb_exec_or_mem", 0)
-        p["mem_buffer"].add_name("alu_result", 0)
-        p["mem_buffer"].add_name("write_data", 0)
-
-        p["data_memory"] = DataMemory(data, clock_phase=1)
-
-        p["wb_buffer_reset"] = Constant(0)
-        p["wb_buffer"] = PipelineBuffer()
-        p["wb_buffer"].add_name("reg_write_sel",0)
-        p["wb_buffer"].add_name("mem_read_data",0)
-        p["wb_buffer"].add_name("wb_enable",0)
-        p["wb_buffer"].add_name("wb_exec_or_mem",0)
-        p["wb_buffer"].add_name("alu_result",0)
-
-        p["wb_value_mux"] = Multiplexer(2)
-
-        p["freeze_pipeline"] = Or(1)
-
-        self.components_setup_complete()
-
-        ############################# CONNECTIONS #############################
-
-        p.add_connection(("alu","busy"),("freeze_pipeline","input_0"))
-
-        p.add_connection(("branch_addr_mux","out"),("instruction_fetch","set_pc_val"))
-        p.add_connection(("do_branch",      "out"),("instruction_fetch","set_pc_en"))
-
-
-        p.add_connection(("instruction_fetch","instruction_opcode"),("decode_buffer","instruction_opcode"))
-        p.add_connection(("instruction_fetch","instruction_reg_read_sel1"),("decode_buffer","instruction_reg_read_sel1"))
-        p.add_connection(("instruction_fetch","instruction_reg_read_sel2"),("decode_buffer","instruction_reg_read_sel2"))
-        p.add_connection(("instruction_fetch","instruction_reg_write_sel"),("decode_buffer","instruction_reg_write_sel"))
-        p.add_connection(("instruction_fetch","instruction_immediate"),("decode_buffer","instruction_immediate"))
-
-        p.add_connection(("do_branch", "out"), ("decode_buffer", "reset"))
-
-        p.add_connection(("decode_buffer","instruction_opcode"),("decoder","opcode"))
-        p.add_connection(("decode_buffer","instruction_reg_read_sel1"),("register_file","read_sel0"))
-        p.add_connection(("decode_buffer","instruction_reg_read_sel2"),("register_file","read_sel1"))
-
-        for key in ["wb_enable", "wb_exec_or_mem", "alu_op", "alu_source", "is_branch", "branch_imm_or_reg", "mem_write", "mem_read"]:
-            p.add_connection(("decoder", key),("execute_buffer", key))
-
-        for key in ["read_data0","read_data1"]:
-            p.add_connection(("register_file", key),("execute_buffer", key))
-
-        p.add_connection(("decode_buffer","instruction_immediate"),    ("execute_buffer", "immediate"))
-        p.add_connection(("decode_buffer","instruction_reg_write_sel"),("execute_buffer","reg_write_sel"))
-
-        p.add_connection(("execute_buffer_reset", "out"), ("execute_buffer", "reset"))
-
-        p.add_connection(("execute_buffer", "alu_op"), ("alu", "operation"))
-        p.add_connection(("execute_buffer", "read_data0"), ("alu", "operand_a"))
-
-        p.add_connection(("execute_buffer","read_data1"), ("alu_source_mux", "input_0"))
-        p.add_connection(("execute_buffer","immediate"),  ("alu_source_mux", "input_1"))
-        p.add_connection(("execute_buffer","alu_source"), ("alu_source_mux", "control"))
-        p.add_connection(("execute_buffer","immediate"), ("branch_addr_mux", "input_0"))
-        p.add_connection(("execute_buffer","read_data0"), ("branch_addr_mux", "input_1"))
-        p.add_connection(("execute_buffer","branch_imm_or_reg"), ("branch_addr_mux", "control"))
-        p.add_connection(("execute_buffer","is_branch"), ("do_branch", "input_1"))
-        p.add_connection(("execute_buffer","mem_write"),("mem_buffer","mem_write"))
-        p.add_connection(("execute_buffer","mem_read"),("mem_buffer","mem_read"))
-        p.add_connection(("execute_buffer","wb_enable"),("mem_buffer","wb_enable"))
-        p.add_connection(("execute_buffer","read_data1"),("mem_buffer","write_data"))
-        p.add_connection(("execute_buffer","reg_write_sel"),("mem_buffer","reg_write_sel"))
-        p.add_connection(("execute_buffer","wb_exec_or_mem"),("mem_buffer", "wb_exec_or_mem"))
-
-
-        p.add_connection(("alu_source_mux", "out"), ("alu", "operand_b"))
-        p.add_connection(("alu", "out"), ("do_branch", "input_0"))
-        p.add_connection(("alu","out"),("mem_buffer","alu_result"))
-
-        p.add_connection(("mem_buffer_reset", "out"), ("mem_buffer", "reset"))
-
-        p.add_connection(("mem_buffer","reg_write_sel"),("wb_buffer","reg_write_sel"))
-        p.add_connection(("mem_buffer","alu_result"),("data_memory","address"))
-        p.add_connection(("mem_buffer","write_data"),("data_memory","write_data"))
-        p.add_connection(("mem_buffer","mem_read"),("data_memory","read"))
-        p.add_connection(("mem_buffer","mem_write"),("data_memory","write"))
-        p.add_connection(("mem_buffer","alu_result"),("wb_buffer","alu_result"))
-        p.add_connection(("mem_buffer", "wb_exec_or_mem"),("wb_buffer", "wb_exec_or_mem"))
-        p.add_connection(("mem_buffer", "wb_enable"),("wb_buffer", "wb_enable"))
-
-        p.add_connection(("wb_buffer_reset", "out"), ("wb_buffer", "reset"))
-
-        p.add_connection(("data_memory","read_data"),("wb_buffer","mem_read_data"))
-        p.add_connection(("wb_buffer","reg_write_sel"),("register_file","write_sel"))
-        p.add_connection(("wb_buffer","alu_result"),("wb_value_mux","input_0"))
-        p.add_connection(("wb_buffer","mem_read_data"),("wb_value_mux","input_1"))
-        p.add_connection(("wb_buffer","wb_exec_or_mem"),("wb_value_mux","control"))
-        p.add_connection(("wb_buffer", "wb_enable"),("register_file", "write_enable"))
-
-        p.add_connection(("wb_value_mux","out"),("register_file","write_data"))
-
-        p.add_connection(("freeze_pipeline","out"),("instruction_fetch","freeze"))
-        p.add_connection(("freeze_pipeline","out"),("decode_buffer","freeze"))
-        p.add_connection(("freeze_pipeline","out"),("execute_buffer", "freeze"))
-        p.add_connection(("freeze_pipeline","out"),("mem_buffer","freeze"))
-        p.add_connection(("freeze_pipeline","out"),("wb_buffer","freeze"))
-
-        p.propagate(True)

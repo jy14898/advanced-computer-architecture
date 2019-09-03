@@ -2,20 +2,33 @@ to start the processor enter in the terminal:
 
 python -B -i processor.py
 
-This will bring up a python prompt. From here you can either type:
+This will bring up a python prompt. From here you can construct a processor:
 
-cco.step()
+p = Processor(instructions, data)
 
-to step a single phase change of the clock. Or you can type:
+to get instructions and data, you need to import a program. Do this like so:
 
-cco.step_multi()
+import programs.fibb
 
-to step multiple cycles. To inspect the values of registers, type:
+and then execute
 
-registerFile.registers
+instructions = programs.fibb.program["instructions"]
+data         = programs.fibb.program["data"]
 
-To inspect the values of data memory, type:
+Now when you create a processor, it will have the program instructions and memory loaded
 
-data_memory.memory
+to single step through, type 
 
-The processor currently runs only one program (programs/add_test.py) by default.
+p.step() 
+
+or
+
+p.step_quiet()
+
+to run the program to end, or for n cycles, call:
+
+p.run_until_done( optional_number_of_cycles )
+
+to view component state, you can access like so:
+
+p.components["register_file"]._state (or _state_next)
